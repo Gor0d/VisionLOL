@@ -4,9 +4,12 @@ DashboardViewer - Dashboard de perfil com histórico de partidas e mapa de calor
 Clique em qualquer partida na lista para filtrar o heatmap para aquela partida.
 """
 
+import logging
 import tkinter as tk
 import threading
 from PIL import Image, ImageTk, ImageFilter
+
+logger = logging.getLogger(__name__)
 
 try:
     import numpy as np
@@ -218,8 +221,8 @@ class DashboardViewer:
                 if img:
                     small = img.resize((MATCH_ICON_SZ, MATCH_ICON_SZ), Image.LANCZOS)
                     self._champ_icons[name] = ImageTk.PhotoImage(small)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Icone do campeão '{name}' não carregado: {e}")
 
     # ─────────────────────────────────────────────────────────────────
     #  HISTÓRICO DE PARTIDAS (clicável)
@@ -416,7 +419,8 @@ class DashboardViewer:
         # Baixa minimap uma vez
         try:
             minimap = self.map_viz._download_minimap()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Falha ao baixar minimap: {e}")
             minimap = None
         self.root.after(0, self._set_minimap, minimap)
 
@@ -442,7 +446,8 @@ class DashboardViewer:
                 density = self._compute_density(timeline, pid_str)
                 # Envia para thread principal processar
                 self.root.after(0, self._on_match_loaded, match_id, density)
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Falha ao processar timeline {match_id}: {e}")
                 continue
 
     def _compute_density(self, timeline, pid_str: str) -> "np.ndarray":

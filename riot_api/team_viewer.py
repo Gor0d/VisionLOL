@@ -5,7 +5,7 @@ Desenvolvido para paiN Gaming (CBLOL) — rastreia soloq dos 5 jogadores.
 """
 
 import tkinter as tk
-from tkinter import simpledialog, messagebox
+from tkinter import simpledialog, messagebox, colorchooser, filedialog
 import threading
 import json
 import os
@@ -31,9 +31,6 @@ TEXT_BRIGHT = "#ffffff"
 TEXT_COLOR  = "#e6edf3"
 TEXT_DIM    = "#7d8590"
 
-PAIN_BLUE   = "#005bac"    # cor da paiN Gaming
-PAIN_GOLD   = "#f5a623"
-
 ROLE_COLORS = {
     "TOP":     "#e5534b",
     "JUNGLE":  "#3fb950",
@@ -42,10 +39,15 @@ ROLE_COLORS = {
     "SUPPORT": "#bc8cff",
 }
 
+DEFAULT_TEAM = {
+    "name":         "Meu Time",
+    "subtitle":     "BR1",
+    "banner_color": "#1a3a5f",
+    "logo_path":    "",
+}
+
 # ═══════════════════════════════════════════════════════════════════════
-#  ROSTER PADRÃO paiN Gaming (CBLOL 2025)
-#  Riot ID = game_name + "#" + tag_line
-#  ATENÇÃO: verifique/atualize as tags no botão ✏ de cada jogador
+#  ROSTER PADRÃO (editável via ⚙ na aba Time)
 # ═══════════════════════════════════════════════════════════════════════
 DEFAULT_ROSTER = [
     {"game_name": "Robo",     "tag_line": "BR1",  "role": "TOP",     "display": "Robo"},
@@ -90,15 +92,25 @@ class TeamViewer(tk.Frame):
     def _load_roster(self):
         try:
             with open(ROSTER_FILE, encoding="utf-8") as f:
-                self._roster = json.load(f)
+                data = json.load(f)
+            if isinstance(data, list):
+                # backward compat: formato antigo era só lista de jogadores
+                self._team_cfg = dict(DEFAULT_TEAM)
+                self._roster = data
+                self._save_roster()
+            else:
+                self._team_cfg = {**DEFAULT_TEAM, **data.get("team", {})}
+                self._roster = data.get("players", [])
         except (FileNotFoundError, json.JSONDecodeError):
+            self._team_cfg = dict(DEFAULT_TEAM)
             self._roster = [dict(p) for p in DEFAULT_ROSTER]
             self._save_roster()
 
     def _save_roster(self):
         try:
             with open(ROSTER_FILE, "w", encoding="utf-8") as f:
-                json.dump(self._roster, f, ensure_ascii=False, indent=2)
+                json.dump({"team": self._team_cfg, "players": self._roster},
+                          f, ensure_ascii=False, indent=2)
         except Exception:
             pass
 
@@ -107,7 +119,7 @@ class TeamViewer(tk.Frame):
     # ─────────────────────────────────────────────────────────────────
 
     def _build_ui(self):
-        # Header paiN Gaming
+        # Banner do time (customizável via ⚙)
         self._build_header()
 
         # Container central com os cards dos jogadores
@@ -142,44 +154,51 @@ class TeamViewer(tk.Frame):
         self._footer_lbl.pack(side=tk.LEFT, padx=10, pady=8)
 
     def _build_header(self):
-        hdr = tk.Frame(self, bg=PAIN_BLUE, height=58)
+        color = self._team_cfg.get("banner_color", DEFAULT_TEAM["banner_color"])
+
+        hdr = tk.Frame(self, bg=color, height=58)
         hdr.pack(fill=tk.X, padx=12, pady=(8, 6))
         hdr.pack_propagate(False)
+        self._hdr = hdr
 
         # Logo / nome do time
-        logo_frame = tk.Frame(hdr, bg=PAIN_BLUE)
+        logo_frame = tk.Frame(hdr, bg=color)
         logo_frame.pack(side=tk.LEFT, padx=14, pady=8)
 
-        # Tenta carregar a logo da paiN Gaming de assets/pain_logo.png
-        self._pain_logo_ph = None
-        logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "pain_logo.png")
-        try:
-            logo_img = Image.open(logo_path).convert("RGBA")
-            # Calcula largura mantendo proporção para caber nos 42px de altura disponíveis
-            target_h = 42
-            ratio = target_h / logo_img.height
-            target_w = int(logo_img.width * ratio)
-            logo_img = logo_img.resize((target_w, target_h), Image.LANCZOS)
-            self._pain_logo_ph = ImageTk.PhotoImage(logo_img)
-            tk.Label(logo_frame, image=self._pain_logo_ph,
-                     bg=PAIN_BLUE).pack(side=tk.LEFT, padx=(0, 10))
-        except Exception:
-            # Fallback: texto caso a imagem não exista
-            tk.Label(logo_frame, text="paiN",
-                     font=("Segoe UI", 18, "bold"),
-                     bg=PAIN_BLUE, fg=PAIN_GOLD).pack(side=tk.LEFT)
-            tk.Label(logo_frame, text=" Gaming",
-                     font=("Segoe UI", 18, "bold"),
-                     bg=PAIN_BLUE, fg=TEXT_BRIGHT).pack(side=tk.LEFT)
+        self._team_logo_ph = None
+        logo_path = self._team_cfg.get("logo_path", "")
+        logo_loaded = False
+        if logo_path and os.path.isfile(logo_path):
+            try:
+                logo_img = Image.open(logo_path).convert("RGBA")
+                target_h = 42
+                ratio = target_h / logo_img.height
+                target_w = int(logo_img.width * ratio)
+                logo_img = logo_img.resize((target_w, target_h), Image.LANCZOS)
+                self._team_logo_ph = ImageTk.PhotoImage(logo_img)
+                tk.Label(logo_frame, image=self._team_logo_ph,
+                         bg=color).pack(side=tk.LEFT, padx=(0, 10))
+                logo_loaded = True
+            except Exception:
+                pass
 
-        tk.Label(logo_frame, text="CBLOL  ·  BR1",
-                 font=("Segoe UI", 10),
-                 bg=PAIN_BLUE, fg="#a8c4e0").pack(side=tk.LEFT, pady=4)
+        if not logo_loaded:
+            tk.Label(logo_frame, text=self._team_cfg.get("name", "Meu Time"),
+                     font=("Segoe UI", 18, "bold"),
+                     bg=color, fg=TEXT_BRIGHT).pack(side=tk.LEFT)
+
+        subtitle = self._team_cfg.get("subtitle", "")
+        if subtitle:
+            tk.Label(logo_frame, text=f"  {subtitle}",
+                     font=("Segoe UI", 10),
+                     bg=color, fg="#a8c4e0").pack(side=tk.LEFT, pady=4)
 
         # Botões de ação no lado direito
-        btn_area = tk.Frame(hdr, bg=PAIN_BLUE)
+        btn_area = tk.Frame(hdr, bg=color)
         btn_area.pack(side=tk.RIGHT, padx=14, pady=10)
 
+        _hbtn(btn_area, "⚙ Time", self._edit_team_config,
+              bg="#2d333b").pack(side=tk.LEFT, padx=(0, 6))
         _hbtn(btn_area, "＋ Jogador", self._on_add_player,
               bg="#1a5f3f").pack(side=tk.LEFT, padx=(0, 6))
         _hbtn(btn_area, "↺ Atualizar tudo", self._refresh_all,
@@ -191,9 +210,121 @@ class TeamViewer(tk.Frame):
 
         self._last_update_lbl = tk.Label(
             hdr, text="", font=("Segoe UI", 8),
-            bg=PAIN_BLUE, fg="#a8c4e0"
+            bg=color, fg="#a8c4e0"
         )
         self._last_update_lbl.pack(side=tk.RIGHT, padx=4)
+
+    def _rebuild_header(self):
+        self._hdr.destroy()
+        self._build_header()
+        self._hdr.pack_configure(before=self._cards_frame)
+
+    def _edit_team_config(self):
+        color = self._team_cfg.get("banner_color", DEFAULT_TEAM["banner_color"])
+
+        dlg = tk.Toplevel(self.root_window)
+        dlg.title("Configurar Time")
+        dlg.resizable(False, False)
+        dlg.configure(bg=BG_DARK)
+        dlg.grab_set()
+
+        pad = {"padx": 12, "pady": 6}
+
+        def _lbl(text, row):
+            tk.Label(dlg, text=text, bg=BG_DARK, fg=TEXT_COLOR,
+                     font=("Segoe UI", 10), anchor="w").grid(
+                row=row, column=0, sticky="w", **pad)
+
+        def _entry(var, row, width=28):
+            e = tk.Entry(dlg, textvariable=var, bg=BG_LIGHT, fg=TEXT_BRIGHT,
+                         width=width, font=("Segoe UI", 10),
+                         insertbackground=TEXT_BRIGHT, relief=tk.FLAT)
+            e.grid(row=row, column=1, columnspan=2, sticky="ew",
+                   padx=(0, 12), pady=6)
+            return e
+
+        # Nome do time
+        name_var = tk.StringVar(value=self._team_cfg.get("name", ""))
+        _lbl("Nome do Time:", 0)
+        _entry(name_var, 0)
+
+        # Legenda (ex: "CBLOL · BR1")
+        sub_var = tk.StringVar(value=self._team_cfg.get("subtitle", ""))
+        _lbl("Legenda:", 1)
+        _entry(sub_var, 1)
+
+        # Cor do banner
+        color_var = tk.StringVar(value=color)
+        _lbl("Cor do Banner:", 2)
+
+        color_row = tk.Frame(dlg, bg=BG_DARK)
+        color_row.grid(row=2, column=1, columnspan=2, sticky="ew",
+                       padx=(0, 12), pady=6)
+
+        color_entry = tk.Entry(color_row, textvariable=color_var,
+                               bg=BG_LIGHT, fg=TEXT_BRIGHT, width=10,
+                               font=("Segoe UI", 10),
+                               insertbackground=TEXT_BRIGHT, relief=tk.FLAT)
+        color_entry.pack(side=tk.LEFT)
+
+        color_preview = tk.Frame(color_row, bg=color_var.get(), width=24, height=24)
+        color_preview.pack(side=tk.LEFT, padx=6)
+        color_preview.pack_propagate(False)
+
+        def pick_color():
+            result = colorchooser.askcolor(
+                color=color_var.get(), parent=dlg, title="Cor do Banner")
+            if result[1]:
+                color_var.set(result[1])
+                color_preview.config(bg=result[1])
+
+        color_entry.bind("<FocusOut>",
+                         lambda e: color_preview.config(bg=color_var.get()))
+
+        tk.Button(color_row, text="🎨", command=pick_color,
+                  bg=BG_LIGHT, fg=TEXT_COLOR, font=("Segoe UI", 10),
+                  relief=tk.FLAT, cursor="hand2", padx=6
+                  ).pack(side=tk.LEFT)
+
+        # Logo
+        logo_var = tk.StringVar(value=self._team_cfg.get("logo_path", ""))
+        _lbl("Logo (PNG/JPG):", 3)
+
+        logo_row = tk.Frame(dlg, bg=BG_DARK)
+        logo_row.grid(row=3, column=1, columnspan=2, sticky="ew",
+                      padx=(0, 12), pady=6)
+
+        tk.Entry(logo_row, textvariable=logo_var, bg=BG_LIGHT, fg=TEXT_BRIGHT,
+                 width=22, font=("Segoe UI", 10),
+                 insertbackground=TEXT_BRIGHT, relief=tk.FLAT).pack(side=tk.LEFT)
+
+        def browse_logo():
+            path = filedialog.askopenfilename(
+                parent=dlg, title="Selecionar Logo",
+                filetypes=[("Imagens", "*.png *.jpg *.jpeg"), ("Todos", "*.*")])
+            if path:
+                logo_var.set(path)
+
+        tk.Button(logo_row, text="📁 Browse", command=browse_logo,
+                  bg=BG_LIGHT, fg=TEXT_COLOR, font=("Segoe UI", 9),
+                  relief=tk.FLAT, cursor="hand2", padx=8, pady=2
+                  ).pack(side=tk.LEFT, padx=(6, 0))
+
+        # Botão salvar
+        def save():
+            self._team_cfg["name"]         = name_var.get().strip() or "Meu Time"
+            self._team_cfg["subtitle"]     = sub_var.get().strip()
+            self._team_cfg["banner_color"] = color_var.get().strip() or DEFAULT_TEAM["banner_color"]
+            self._team_cfg["logo_path"]    = logo_var.get().strip()
+            self._save_roster()
+            self._rebuild_header()
+            dlg.destroy()
+
+        tk.Button(dlg, text="Salvar", command=save,
+                  bg=SUCCESS, fg=TEXT_BRIGHT,
+                  font=("Segoe UI", 11, "bold"),
+                  relief=tk.FLAT, cursor="hand2", padx=20, pady=8
+                  ).grid(row=4, column=0, columnspan=3, pady=(8, 14))
 
     def _build_table_header(self):
         row = tk.Frame(self._cards_frame, bg=BG_MEDIUM)

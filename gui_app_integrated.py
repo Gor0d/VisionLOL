@@ -665,7 +665,13 @@ class VisionLOLAppIntegrated:
     # ===================================================================
 
     def toggle_auto_mode(self):
-        pass
+        if self.auto_mode_var.get():
+            status = self.detector.get_status()
+            if status.get('running') and status.get('in_game') and not self.is_monitoring:
+                self.start_monitoring()
+        else:
+            if self.is_monitoring:
+                self.stop_monitoring()
 
     def toggle_monitoring(self):
         if self.is_monitoring:
@@ -788,8 +794,8 @@ class VisionLOLAppIntegrated:
             conf = int(attention_data['confidence'] * 100)
             self.metric_confidence.config(text=f"{conf}%")
 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"update_metrics: {e}")
 
     def update_camera_preview(self):
         """Atualiza o preview da camera"""
@@ -801,8 +807,8 @@ class VisionLOLAppIntegrated:
                 imgtk = ImageTk.PhotoImage(image=img)
                 self.camera_canvas.create_image(0, 0, anchor=tk.NW, image=imgtk)
                 self.camera_canvas.imgtk = imgtk
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"update_camera_preview: {e}")
 
         self.root.after(33, self.update_camera_preview)
 
@@ -1533,7 +1539,7 @@ class VisionLOLAppIntegrated:
             self.user_config["proximity"]["gank_distance"] = int(self.cfg_gank_dist.get().strip())
             self.user_config["proximity"]["poll_interval"] = float(self.cfg_poll_interval.get().strip())
         except ValueError:
-            pass
+            messagebox.showwarning("Aviso", "Gank distance deve ser inteiro e Poll interval deve ser decimal.\nValores anteriores mantidos.")
 
         save_config(self.user_config)
 
