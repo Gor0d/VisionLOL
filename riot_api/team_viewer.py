@@ -68,11 +68,13 @@ HISTORY_N  = 10   # últimas N partidas para resumo
 class TeamViewer(tk.Frame):
     """Frame que representa a aba 'Time' no notebook principal."""
 
-    def __init__(self, parent, match_api, map_visualizer, root):
+    def __init__(self, parent, match_api, map_visualizer, root,
+                 scrim_server=None):
         super().__init__(parent, bg=BG_DARKEST)
-        self.match_api   = match_api
-        self.map_viz     = map_visualizer
-        self.root_window = root         # janela raiz (para abrir Toplevels)
+        self.match_api    = match_api
+        self.map_viz      = map_visualizer
+        self.root_window  = root         # janela raiz (para abrir Toplevels)
+        self.scrim_server = scrim_server  # ScrimServer | None
 
         self._roster: list[dict]            = []   # [{game_name, tag_line, role, display, ...}]
         self._player_cards: list[PlayerCard] = []
@@ -428,6 +430,7 @@ class TeamViewer(tk.Frame):
             match_api=self.match_api,
             roster=self._roster,
             map_visualizer=self.map_viz,
+            server=self.scrim_server,
         )
 
     def _on_add_player(self):

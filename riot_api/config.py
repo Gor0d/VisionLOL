@@ -57,7 +57,12 @@ DEFAULT_CONFIG = {
         "gank_distance": 2000,
         "gank_duration": 5.0
     },
-    "auto_start_riot_tracking": False
+    "auto_start_riot_tracking": False,
+    "scrim_server": {
+        "enabled": False,
+        "port": 7654,
+        "token": ""   # gerado automaticamente ao ativar pela primeira vez
+    }
 }
 
 
@@ -72,6 +77,9 @@ def load_config():
         if "proximity" in config:
             merged["proximity"] = DEFAULT_CONFIG["proximity"].copy()
             merged["proximity"].update(config["proximity"])
+        if "scrim_server" in config:
+            merged["scrim_server"] = DEFAULT_CONFIG["scrim_server"].copy()
+            merged["scrim_server"].update(config["scrim_server"])
         return merged
     except FileNotFoundError:
         save_config(DEFAULT_CONFIG)

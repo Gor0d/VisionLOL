@@ -29,6 +29,7 @@ from riot_api.proximity_tracker import ProximityTracker
 from riot_api.reaction_analyzer import ReactionAnalyzer
 from riot_api.data_correlator import DataCorrelator
 from riot_api.map_visualizer import MapVisualizer
+from riot_api.scrim_server import ScrimServer
 from riot_api.pathing_visualizer import PathingVisualizer
 
 # Inicializa logger
@@ -68,6 +69,9 @@ class VisionLOLAppIntegrated:
         self.pathing_visualizer = PathingVisualizer(self.map_visualizer)
         self.is_live_tracking = False
         self._cached_puuid = None
+
+        # Servidor de scrims (opcional, ativado no Config)
+        self.scrim_server = self._init_scrim_server()
 
         # Callback para eventos do jogo ao vivo
         self.proximity_tracker.on_event_detected = self._on_game_event
@@ -505,6 +509,7 @@ class VisionLOLAppIntegrated:
             match_api     = self.match_api,
             map_visualizer = self.map_visualizer,
             root          = self.root,
+            scrim_server  = self.scrim_server,
         )
         team_frame.pack(fill=tk.BOTH, expand=True)
 
@@ -1572,10 +1577,33 @@ class VisionLOLAppIntegrated:
     #  CLEANUP
     # ===================================================================
 
+    def _init_scrim_server(self) -> "ScrimServer | None":
+        """Cria e (opcionalmente) inicia o servidor de scrims."""
+        import uuid
+        cfg = self.user_config.get("scrim_server", {})
+        token = cfg.get("token", "")
+        if not token:
+            token = str(uuid.uuid4())
+            self.user_config.setdefault("scrim_server", {})["token"] = token
+            save_config(self.user_config)
+
+        server = ScrimServer(
+            port=cfg.get("port", 7654),
+            token=token,
+        )
+        if cfg.get("enabled", False):
+            try:
+                server.start()
+            except Exception as e:
+                logger.warning(f"Servidor de scrims não iniciado: {e}")
+        return server
+
     def on_closing(self):
         """Chamado ao fechar a janela"""
         self._stop_live_tracking()
         self.stop_monitoring()
+        if self.scrim_server and self.scrim_server.is_running:
+            self.scrim_server.stop()
         self.root.destroy()
 
 

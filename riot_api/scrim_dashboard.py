@@ -146,22 +146,25 @@ class ScrimDashboard(tk.Toplevel):
     · Detalhes + métricas por jogador (direita)
     """
 
-    def __init__(self, root, match_api, roster: list, map_visualizer=None):
+    def __init__(self, root, match_api, roster: list, map_visualizer=None,
+                 server=None):
         """
         match_api      : instância de MatchAPI
         roster         : lista de dicts {game_name, tag_line, role, display}
         map_visualizer : MapVisualizer (para ícones de campeão, opcional)
+        server         : ScrimServer | None (servidor embutido)
         """
         super().__init__(root)
         self.title("VisionLOL — Scrims Dashboard")
         self.configure(bg=BG_DARKEST)
-        self.geometry("1120x700")
+        self.geometry("1120x720")
         self.resizable(True, True)
         self.lift()
 
         self.match_api  = match_api
         self.roster     = roster
         self.map_viz    = map_visualizer
+        self.server     = server
         self.scrim_mgr  = ScrimManager()
 
         # Cache local de match data {match_id: data}
@@ -174,6 +177,8 @@ class ScrimDashboard(tk.Toplevel):
         self._sess_rows: dict   = {}
         # Estado de loading
         self._loading = False
+        # IDs de capturas ao vivo já vinculadas a sessões
+        self._used_captures: set = set()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._closed = False
@@ -183,12 +188,17 @@ class ScrimDashboard(tk.Toplevel):
         # Pré-carrega PUUIDs do roster em background
         threading.Thread(target=self._preload_puuids, daemon=True).start()
 
+        # Atualiza painel de capturas ao vivo a cada 10s
+        self._schedule_capture_refresh()
+
     # ─────────────────────────────────────────────────────────────────
     #  LAYOUT
     # ─────────────────────────────────────────────────────────────────
 
     def _build(self):
         self._build_header()
+        self._build_server_bar()
+        self._build_live_captures_bar()
 
         body = tk.Frame(self, bg=BG_DARKEST)
         body.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 8))
@@ -240,6 +250,187 @@ class ScrimDashboard(tk.Toplevel):
         btn_add.pack(side=tk.RIGHT, padx=(0, 8), pady=12)
 
         self._update_header_stats()
+
+    def _build_server_bar(self):
+        """Barra de controle do servidor embutido (aparece apenas se server foi passado)."""
+        bar = tk.Frame(self, bg=BG_DARK, height=36)
+        bar.pack(fill=tk.X, padx=10, pady=(0, 2))
+        bar.pack_propagate(False)
+
+        if not self.server:
+            tk.Label(bar, text="⚠  Servidor indisponível — reinicie o VisionLOL",
+                     font=("Segoe UI", 8), bg=BG_DARK, fg=WARNING
+                     ).pack(side=tk.LEFT, padx=10, pady=8)
+            return
+
+        # Indicador de status
+        self._srv_dot = tk.Label(bar, text="●", font=("Segoe UI", 10),
+                                 bg=BG_DARK, fg=TEXT_DIM)
+        self._srv_dot.pack(side=tk.LEFT, padx=(10, 2), pady=8)
+
+        self._srv_lbl = tk.Label(bar, text="Servidor parado",
+                                 font=("Segoe UI", 8), bg=BG_DARK, fg=TEXT_DIM)
+        self._srv_lbl.pack(side=tk.LEFT, pady=8)
+
+        # Token (truncado)
+        token_short = (self.server.token[:8] + "…") if self.server.token else "—"
+        tk.Label(bar, text=f"  Token: {token_short}",
+                 font=("Cascadia Code", 8), bg=BG_DARK, fg=TEXT_DIM
+                 ).pack(side=tk.LEFT, padx=8, pady=8)
+
+        # Botão copiar configuração para jogadores
+        tk.Button(bar, text="Copiar config para jogadores",
+                  font=("Segoe UI", 8), bg=BG_LIGHT, fg=ACCENT,
+                  relief=tk.FLAT, cursor="hand2", padx=6, pady=2,
+                  command=self._copy_agent_config
+                  ).pack(side=tk.LEFT, padx=4, pady=6)
+
+        # Toggle iniciar/parar
+        self._srv_btn = tk.Button(bar,
+                                  font=("Segoe UI", 8, "bold"),
+                                  relief=tk.FLAT, cursor="hand2", padx=8, pady=2,
+                                  command=self._toggle_server)
+        self._srv_btn.pack(side=tk.RIGHT, padx=(0, 10), pady=6)
+
+        self._refresh_server_status()
+
+    def _build_live_captures_bar(self):
+        """Barra mostrando capturas ao vivo ainda não vinculadas a uma sessão."""
+        self._captures_bar = tk.Frame(self, bg=BG_MEDIUM)
+        self._captures_bar.pack(fill=tk.X, padx=10, pady=(0, 4))
+        self._refresh_live_captures()
+
+    def _refresh_server_status(self):
+        """Atualiza os widgets de status do servidor."""
+        if not self.server or not hasattr(self, "_srv_dot"):
+            return
+        if self.server.is_running:
+            url = self.server.get_url()
+            self._srv_dot.config(fg=SUCCESS)
+            self._srv_lbl.config(text=f"Rodando em {url}", fg=SUCCESS)
+            self._srv_btn.config(text="■ Parar", bg=DANGER)
+        else:
+            self._srv_dot.config(fg=TEXT_DIM)
+            self._srv_lbl.config(text="Servidor parado", fg=TEXT_DIM)
+            self._srv_btn.config(text="▶ Iniciar", bg="#1a5f3f", fg=TEXT_COLOR)
+
+    def _toggle_server(self):
+        """Liga/desliga o servidor embutido."""
+        if not self.server:
+            return
+        if self.server.is_running:
+            self.server.stop()
+        else:
+            try:
+                self.server.start()
+            except Exception as e:
+                messagebox.showerror("Erro", f"Não foi possível iniciar o servidor:\n{e}",
+                                     parent=self)
+        self._refresh_server_status()
+
+    def _copy_agent_config(self):
+        """Copia a configuração do agente para o clipboard."""
+        if not self.server:
+            return
+        url   = self.server.get_url()
+        token = self.server.token
+        text  = (f"URL do Servidor: {url}\n"
+                 f"Token:           {token}\n\n"
+                 f"Cole no VisionLOL Agent instalado no seu PC.")
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        messagebox.showinfo("Copiado!",
+                            f"Configuração copiada.\n\n"
+                            f"Servidor: {url}\n"
+                            f"Token: {token[:8]}…",
+                            parent=self)
+
+    def _refresh_live_captures(self):
+        """Atualiza a barra de capturas ao vivo não vinculadas."""
+        for w in self._captures_bar.winfo_children():
+            w.destroy()
+
+        if not self.server:
+            return
+
+        # Captura dos últimos 7 dias
+        since = datetime.now().timestamp() - 7 * 24 * 3600
+        captures = self.server.get_captures(since=since)
+
+        # Filtra as que já foram vinculadas
+        new_caps = [c for c in captures
+                    if c.get("capture_id") not in self._used_captures]
+
+        if not new_caps:
+            tk.Label(self._captures_bar,
+                     text="Nenhuma captura ao vivo pendente.",
+                     font=("Segoe UI", 8), bg=BG_MEDIUM, fg=TEXT_DIM
+                     ).pack(side=tk.LEFT, padx=10, pady=6)
+            return
+
+        # Agrupa por janela de tempo (partidas dentro de 15 min = mesma sessão)
+        groups = _group_captures_by_game(new_caps)
+
+        tk.Label(self._captures_bar,
+                 text=f"🔴  {len(groups)} partida(s) capturada(s) ao vivo",
+                 font=("Segoe UI", 9, "bold"), bg=BG_MEDIUM, fg=DANGER
+                 ).pack(side=tk.LEFT, padx=(10, 6), pady=6)
+
+        for i, group in enumerate(groups):
+            ts   = group[0].get("timestamp", 0)
+            dur  = _extract_duration(group[0].get("allgamedata", {}))
+            date = datetime.fromtimestamp(ts).strftime("%d/%m %H:%M")
+            lbl  = f"Jogo {i + 1}  ({date}, {dur})"
+
+            tk.Button(self._captures_bar,
+                      text=f"＋ {lbl}",
+                      font=("Segoe UI", 8), bg=BG_LIGHT, fg=ACCENT,
+                      relief=tk.FLAT, cursor="hand2", padx=6, pady=2,
+                      command=lambda g=group: self._create_session_from_captures(g)
+                      ).pack(side=tk.LEFT, padx=2, pady=4)
+
+    def _create_session_from_captures(self, captures: list):
+        """Cria uma sessão de scrim a partir de capturas ao vivo."""
+        from tkinter import simpledialog
+        opponent = simpledialog.askstring(
+            "Nova Sessão — Captura ao Vivo",
+            "Nome do time adversário:",
+            parent=self
+        )
+        if not opponent or not opponent.strip():
+            return
+
+        match_ids = []
+        for cap in captures:
+            cap_id    = cap.get("capture_id", "")
+            allgame   = cap.get("allgamedata", {})
+            syn_match = _build_synthetic_match(allgame, cap_id,
+                                               cap.get("timestamp", 0),
+                                               self._puuids, self.roster)
+            self._match_cache[cap_id] = syn_match
+            match_ids.append(cap_id)
+            self._used_captures.add(cap_id)
+
+        sess = self.scrim_mgr.add_session(
+            opponent=opponent.strip(),
+            match_ids=match_ids,
+            notes="[AO VIVO]",
+        )
+        self._render_session_list()
+        self._update_header_stats()
+        self._refresh_live_captures()
+        self._select_session(sess["id"])
+
+    def _schedule_capture_refresh(self):
+        """Agenda refresh periódico das capturas ao vivo (a cada 10s)."""
+        if not self._closed:
+            try:
+                self._refresh_live_captures()
+                if self.server:
+                    self._refresh_server_status()
+            except Exception:
+                pass
+            super().after(10000, self._schedule_capture_refresh)
 
     def _build_session_panel(self, parent):
         _sec_label(parent, "SESSÕES DE SCRIM")
@@ -1202,6 +1393,133 @@ class _MatchPickerDialog(tk.Toplevel):
         notes = self._notes_var.get().strip()
         self._callback(opp, match_ids, notes)
         self.destroy()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  HELPERS — CAPTURAS AO VIVO
+# ═══════════════════════════════════════════════════════════════════════
+
+def _group_captures_by_game(captures: list, window_s: float = 900) -> list[list]:
+    """
+    Agrupa capturas de agentes que são do mesmo jogo (dentro de window_s segundos).
+    Retorna lista de grupos, cada grupo contendo as capturas daquele jogo.
+    """
+    sorted_caps = sorted(captures, key=lambda c: c.get("timestamp", 0))
+    groups = []
+    current = []
+    last_ts = None
+
+    for cap in sorted_caps:
+        ts = cap.get("timestamp", 0)
+        if last_ts is None or (ts - last_ts) > window_s:
+            if current:
+                groups.append(current)
+            current = [cap]
+        else:
+            current.append(cap)
+        last_ts = ts
+
+    if current:
+        groups.append(current)
+
+    return groups
+
+
+def _extract_duration(allgamedata: dict) -> str:
+    """Extrai duração formatada do allgamedata do Live Client."""
+    game_time = allgamedata.get("gameData", {}).get("gameTime", 0)
+    mins = int(game_time) // 60
+    secs = int(game_time) % 60
+    return f"{mins}:{secs:02d}"
+
+
+def _build_synthetic_match(allgamedata: dict, capture_id: str,
+                            timestamp: float,
+                            puuids: dict, roster: list) -> dict:
+    """
+    Converte allgamedata do Live Client para um dict compatível com Match V5.
+    Campos disponíveis: KDA, CS, visão, kill participation.
+    Campos indisponíveis: gold=0, damage=0 (marcado com _live_capture=True).
+    """
+    players  = allgamedata.get("allPlayers", [])
+    gamedata = allgamedata.get("gameData", {})
+    events   = allgamedata.get("events", {}).get("Events", [])
+
+    # Descobre o time vencedor via evento GameEnd
+    end_event = next((e for e in events if e.get("EventName") == "GameEnd"), None)
+
+    # Monta lookup riotId.lower() → puuid a partir do cache
+    roster_by_id = {}
+    for rp in roster:
+        key   = f"{rp['game_name']}#{rp['tag_line']}"
+        puuid = puuids.get(key)
+        if puuid:
+            roster_by_id[key.lower()] = puuid
+
+    team_id_map   = {"ORDER": 100, "CHAOS": 200}
+    team_kills    = {100: 0, 200: 0}
+    participants  = []
+
+    for p in players:
+        team_str = p.get("team", "ORDER")
+        team_id  = team_id_map.get(team_str, 100)
+        scores   = p.get("scores", {})
+        kills    = scores.get("kills", 0)
+        team_kills[team_id] = team_kills.get(team_id, 0) + kills
+
+        riot_id = p.get("riotId", "")
+        puuid   = roster_by_id.get(riot_id.lower(), "")
+
+        participants.append({
+            "puuid":                         puuid,
+            "summonerName":                  p.get("summonerName", ""),
+            "riotId":                        riot_id,
+            "championName":                  p.get("championName", "?"),
+            "teamId":                        team_id,
+            "win":                           False,  # preenchido abaixo
+            "kills":                         kills,
+            "deaths":                        scores.get("deaths", 0),
+            "assists":                       scores.get("assists", 0),
+            "totalMinionsKilled":            scores.get("creepScore", 0),
+            "neutralMinionsKilled":          0,
+            "visionScore":                   int(scores.get("wardScore", 0)),
+            "goldEarned":                    0,
+            "totalDamageDealtToChampions":   0,
+            "teamPosition":                  p.get("position", ""),
+            "_live_capture":                 True,
+        })
+
+    # Determina vencedor
+    winning_team_id = None
+    if end_event:
+        # O resultado é relativo ao primeiro jogador encontrado com riotId no roster
+        # Tentamos identificar o lado do agente que enviou pelo evento GameEnd
+        # GameEnd.Result: "Win" ou "Lose" é relativo ao jogador ativo
+        # Como não sabemos quem é o "ativo", usamos o time que ganhou via equipes
+        # A Riot retorna "Result": "Win"/"Lose" relative to the *sender*, não disponível aqui
+        # Fallback: usa teamId 100 como vencedor se não há informação
+        pass  # sem info confiável, deixa como empate / None
+
+    for p_data in participants:
+        if winning_team_id is not None:
+            p_data["win"] = (p_data["teamId"] == winning_team_id)
+
+    game_dur = int(gamedata.get("gameTime", 0))
+
+    return {
+        "metadata": {"matchId": capture_id, "participants": []},
+        "info": {
+            "gameDuration":       game_dur,
+            "gameStartTimestamp": int((timestamp - game_dur) * 1000),
+            "queueId":            0,
+            "gameMode":           gamedata.get("gameMode", "CLASSIC"),
+            "participants":       participants,
+            "teams": [
+                {"teamId": 100, "win": winning_team_id == 100},
+                {"teamId": 200, "win": winning_team_id == 200},
+            ],
+        },
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════
