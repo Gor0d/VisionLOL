@@ -48,6 +48,8 @@ Integração completa com a Riot Games API para acompanhamento de soloq, scrims 
 - Registro e acompanhamento de sessões de scrim contra outros times
 - Comparativo de métricas por partida e por jogador
 
+![Scrims Dashboard](docs/screenshots/Scrims.png)
+
 ---
 
 ## Instalação
