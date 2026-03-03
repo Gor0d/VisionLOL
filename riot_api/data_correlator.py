@@ -96,8 +96,29 @@ class DataCorrelator:
             self.correlate()
 
         self._insights = []
+        summary = self.get_distraction_summary()
 
-        # Insight 1: Mortes durante distracao
+        # ── 0. Resumo geral de foco ─────────────────────────────────────
+        if summary["total_samples"] > 0:
+            focus_pct = summary["focus_pct"]
+            if focus_pct >= 80:
+                self._insights.append({
+                    "type": "POSITIVE",
+                    "text": f"Sessao com {focus_pct}% de foco — otima concentracao!",
+                })
+            elif focus_pct >= 60:
+                self._insights.append({
+                    "type": "INFO",
+                    "text": f"Foco geral: {focus_pct}% da sessao",
+                })
+            else:
+                self._insights.append({
+                    "type": "WARNING",
+                    "text": f"Atencao baixa: apenas {focus_pct}% de foco na sessao",
+                    "severity": "high",
+                })
+
+        # ── 1. Mortes durante distracao ─────────────────────────────────
         deaths = [c for c in self._correlations if c["event"].get("type") == "DEATH"]
         distracted_deaths = [c for c in deaths if c["was_distracted"]]
 
@@ -105,64 +126,105 @@ class DataCorrelator:
             if distracted_deaths:
                 self._insights.append({
                     "type": "WARNING",
-                    "text": f"Voce estava distraido durante {len(distracted_deaths)} de {len(deaths)} mortes",
+                    "text": f"Distraido durante {len(distracted_deaths)}/{len(deaths)} mortes",
                     "severity": "high" if len(distracted_deaths) > len(deaths) / 2 else "medium",
                 })
             else:
                 self._insights.append({
                     "type": "POSITIVE",
                     "text": "Nenhuma morte ocorreu enquanto voce estava distraido!",
-                    "severity": "low",
                 })
 
-        # Insight 2: Kills perdidos (oportunidades nao aproveitadas)
-        ally_kills = [c for c in self._correlations
-                      if c["event"].get("type") == "KILL"
-                      and c["event"].get("team") == "ORDER"]  # Simplificacao
-        distracted_kills = [c for c in ally_kills if c["was_distracted"]]
-
-        if distracted_kills:
+        # ── 2. Ult upgrades perdidos ─────────────────────────────────────
+        ult_events = [
+            c for c in self._correlations
+            if c["event"].get("type") == "LEVEL_UP"
+            and c["event"].get("is_ult_upgrade")
+        ]
+        distracted_ults = [c for c in ult_events if c["was_distracted"]]
+        if distracted_ults:
             self._insights.append({
-                "type": "INFO",
-                "text": f"Seu time conseguiu {len(distracted_kills)} kills enquanto voce estava distraido",
-                "severity": "low",
+                "type": "WARNING",
+                "text": f"Distraido durante {len(distracted_ults)} upgrade(s) de ult",
+                "severity": "high",
             })
 
-        # Insight 3: Tendencia de distracao ao longo do tempo
+        # ── 3. Objetivos (Dragon / Baron / Rift Herald) ──────────────────
+        _OBJ_NAMES = {
+            "DragonKill":     "Dragon",
+            "BaronKill":      "Baron",
+            "RiftHeraldKill": "Rift Herald",
+        }
+        objectives = [
+            c for c in self._correlations
+            if c["event"].get("type") == "LIVE_EVENT"
+            and c["event"].get("event_name", "") in _OBJ_NAMES
+        ]
+        distracted_obj = [c for c in objectives if c["was_distracted"]]
+        if distracted_obj:
+            names = [_OBJ_NAMES[c["event"]["event_name"]] for c in distracted_obj]
+            unique = list(dict.fromkeys(names))   # preserva ordem, sem duplicatas
+            self._insights.append({
+                "type": "WARNING",
+                "text": f"Distraido durante {len(distracted_obj)} objetivo(s): {', '.join(unique)}",
+                "severity": "high",
+            })
+
+        # ── 4. Fase com mais distracao (early/mid/late) ──────────────────
+        if len(self._attention_log) > 50:
+            def _dist_pct(samples):
+                if not samples:
+                    return None
+                return sum(1 for a in samples if a["is_distracted"]) / len(samples) * 100
+
+            phases = [
+                ("Early game (<15 min)", _dist_pct(
+                    [a for a in self._attention_log if a["game_time"] < 900])),
+                ("Mid game (15-25 min)", _dist_pct(
+                    [a for a in self._attention_log if 900 <= a["game_time"] < 1500])),
+                ("Late game (>25 min)", _dist_pct(
+                    [a for a in self._attention_log if a["game_time"] >= 1500])),
+            ]
+            valid = [(name, pct) for name, pct in phases if pct is not None]
+            if valid:
+                worst_name, worst_pct = max(valid, key=lambda x: x[1])
+                if worst_pct > 35:
+                    self._insights.append({
+                        "type": "INFO",
+                        "text": f"Mais distraido no {worst_name} ({worst_pct:.0f}% do tempo)",
+                    })
+
+        # ── 5. Tendencia de atencao (primeira vs segunda metade) ─────────
         if len(self._attention_log) > 100:
             mid = len(self._attention_log) // 2
-            first_half = self._attention_log[:mid]
-            second_half = self._attention_log[mid:]
-
-            first_dist = sum(1 for a in first_half if a["is_distracted"]) / max(len(first_half), 1)
-            second_dist = sum(1 for a in second_half if a["is_distracted"]) / max(len(second_half), 1)
+            first_dist  = sum(1 for a in self._attention_log[:mid]  if a["is_distracted"]) / mid
+            second_dist = sum(1 for a in self._attention_log[mid:]  if a["is_distracted"]) / (len(self._attention_log) - mid)
 
             if second_dist > first_dist * 1.5:
                 self._insights.append({
                     "type": "WARNING",
-                    "text": "Sua atencao caiu significativamente na segunda metade da partida",
-                    "severity": "medium",
+                    "text": "Atencao caiu na segunda metade da sessao",
                 })
             elif second_dist < first_dist * 0.5:
                 self._insights.append({
                     "type": "POSITIVE",
-                    "text": "Sua atencao melhorou ao longo da partida!",
-                    "severity": "low",
+                    "text": "Atencao melhorou ao longo da sessao!",
                 })
 
-        # Insight 4: Eventos criticos ignorados
-        critical_events = [
-            c for c in self._correlations
-            if c["event"].get("type") in ("KILL", "DEATH", "LEVEL_UP")
-            and c["event"].get("is_ult_upgrade", False)
-            and c["was_distracted"]
-        ]
+        # ── 6. Maior streak de distracao continua ────────────────────────
+        max_streak = current_streak = 0
+        for a in self._attention_log:
+            if a["is_distracted"]:
+                current_streak += 1
+                max_streak = max(max_streak, current_streak)
+            else:
+                current_streak = 0
 
-        if critical_events:
+        streak_sec = max_streak * 0.033   # ~30 fps de amostragem
+        if streak_sec > 10:
             self._insights.append({
-                "type": "WARNING",
-                "text": f"Voce perdeu {len(critical_events)} momentos criticos (ult upgrades, etc.) por distracao",
-                "severity": "high",
+                "type": "WARNING" if streak_sec > 20 else "INFO",
+                "text": f"Maior periodo de distracao continua: {streak_sec:.0f}s",
             })
 
         return self._insights

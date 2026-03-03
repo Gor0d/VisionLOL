@@ -354,8 +354,9 @@ class VisionLOLAppIntegrated:
             wrap=tk.WORD, state=tk.DISABLED, highlightthickness=0, height=6
         )
         self.insights_text.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
-        self.insights_text.tag_configure("WARN", foreground=self.danger)
-        self.insights_text.tag_configure("OK", foreground=self.success)
+        self.insights_text.tag_configure("WARN",  foreground=self.danger)
+        self.insights_text.tag_configure("OK",   foreground=self.success)
+        self.insights_text.tag_configure("INFO", foreground=self.accent)
 
     # ===================================================================
     #  TAB 3: POS-JOGO
@@ -937,6 +938,15 @@ class VisionLOLAppIntegrated:
                 self.enemy_labels[enemy_idx].config(text=text, fg=color)
                 enemy_idx += 1
 
+        # Atualiza insights em tempo real (a cada 30s para nao sobrecarregar)
+        if not hasattr(self, "_last_insight_update"):
+            self._last_insight_update = 0
+        now = time.time()
+        if now - self._last_insight_update >= 30:
+            self._last_insight_update = now
+            self.data_correlator.correlate()
+            self._display_insights(self.data_correlator.get_insights())
+
         # Proximo update em 1 segundo
         self.root.after(1000, self._update_analytics_panel)
 
@@ -948,9 +958,13 @@ class VisionLOLAppIntegrated:
         if not insights:
             self.insights_text.insert(tk.END, "Sem insights para esta sessao.\n", "OK")
         else:
+            _ICONS = {"WARNING": "! ", "POSITIVE": "+ ", "INFO": "· "}
+            _TAGS  = {"WARNING": "WARN", "POSITIVE": "OK", "INFO": "INFO"}
             for insight in insights:
-                tag = "WARN" if insight["type"] == "WARNING" else "OK"
-                self.insights_text.insert(tk.END, f"{'!'if tag == 'WARN' else '>'} {insight['text']}\n", tag)
+                itype = insight.get("type", "INFO")
+                tag   = _TAGS.get(itype, "INFO")
+                icon  = _ICONS.get(itype, "· ")
+                self.insights_text.insert(tk.END, f"{icon}{insight['text']}\n", tag)
 
         self.insights_text.config(state=tk.DISABLED)
 
