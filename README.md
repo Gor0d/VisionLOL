@@ -25,7 +25,7 @@ Integração completa com a Riot Games API para acompanhamento de soloq, scrims 
 - Benchmarks por role (TOP/JGL/MID/ADC/SUP) baseados em padrão pro/soloq alto
 - Radar individual por jogador e visão geral do time em grid
 
-![Performance Radar](docs/screenshots/Perfomance.png)
+![Performance Radar](docs/screenshots/Performance.png)
 
 ### Dashboard de Partidas
 
@@ -104,8 +104,16 @@ psutil
 ```json
 {
     "riot_api_key": "RGAPI-sua-chave-aqui",
+    "game_name": "SeuNomeIngame",
+    "tag_line": "BR1",
     "region": "br1",
-    "routing": "americas"
+    "routing": "americas",
+    "proximity": {
+        "poll_interval": 0.5,
+        "gank_distance": 2000,
+        "gank_duration": 5.0
+    },
+    "auto_start_riot_tracking": true
 }
 ```
 
