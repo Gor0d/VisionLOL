@@ -11,7 +11,7 @@ Permite:
 """
 
 import tkinter as tk
-from tkinter import simpledialog, messagebox
+from tkinter import messagebox
 import threading
 import json
 import os
@@ -754,53 +754,18 @@ class ScrimDashboard(tk.Toplevel):
     # ─────────────────────────────────────────────────────────────────
 
     def _add_session(self):
-        """Diálogo passo-a-passo para adicionar sessão de scrim."""
-        opponent = simpledialog.askstring(
-            "Nova Sessão de Scrim",
-            "Nome do time adversário:\n(ex: LOUD, RED Canids, Flamengo)",
-            parent=self
-        )
-        if not opponent or not opponent.strip():
-            return
+        """Abre diálogo com seletor visual de partidas recentes."""
+        def _on_confirm(opponent, match_ids, notes):
+            sess = self.scrim_mgr.add_session(
+                opponent=opponent,
+                match_ids=match_ids,
+                notes=notes,
+            )
+            self._render_session_list()
+            self._update_header_stats()
+            self._select_session(sess["id"])
 
-        ids_raw = simpledialog.askstring(
-            "IDs das Partidas",
-            "Cole os Match IDs das partidas (separados por vírgula ou nova linha):\n"
-            "Exemplo: BR1_3212841836, BR1_3212818739",
-            parent=self
-        )
-        if not ids_raw or not ids_raw.strip():
-            return
-
-        # Separa IDs por vírgula, espaço, ou nova linha
-        match_ids = [m.strip() for m in re.split(r"[,\s\n]+", ids_raw) if m.strip()]
-        if not match_ids:
-            messagebox.showwarning("Atenção", "Nenhum Match ID válido informado.",
-                                   parent=self)
-            return
-
-        notes = simpledialog.askstring(
-            "Observações (opcional)",
-            "Observações sobre esta sessão:\n(ex: BO3 treino pré-CBLOL, fase de grupos)",
-            parent=self
-        ) or ""
-
-        date_str = simpledialog.askstring(
-            "Data (opcional)",
-            f"Data da sessão (YYYY-MM-DD).\nDeixe em branco para usar hoje:",
-            parent=self
-        ) or ""
-
-        sess = self.scrim_mgr.add_session(
-            opponent=opponent.strip(),
-            match_ids=match_ids,
-            notes=notes.strip(),
-            date=date_str.strip()
-        )
-
-        self._render_session_list()
-        self._update_header_stats()
-        self._select_session(sess["id"])
+        _MatchPickerDialog(self, self.match_api, self.roster, self._puuids, _on_confirm)
 
     def _remove_session(self, sess_id: str):
         ok = messagebox.askyesno(
@@ -876,6 +841,366 @@ class ScrimDashboard(tk.Toplevel):
 
     def _on_close(self):
         self._closed = True
+        self.destroy()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  SELETOR VISUAL DE PARTIDAS
+# ═══════════════════════════════════════════════════════════════════════
+
+class _MatchPickerDialog(tk.Toplevel):
+    """
+    Diálogo modal que busca automaticamente as partidas recentes dos
+    jogadores do roster e deixa o usuário marcar quais foram de scrim.
+    Elimina a necessidade de o usuário conhecer Match IDs.
+    """
+
+    QUEUE_NAMES = {420: "Ranked Solo", 400: "Normal", 440: "Flex",
+                   450: "ARAM", 0: "Custom/Scrim"}
+
+    def __init__(self, parent, match_api, roster: list,
+                 puuids_cache: dict, callback):
+        super().__init__(parent)
+        self.title("Nova Sessão de Scrim")
+        self.configure(bg=BG_DARKEST)
+        self.geometry("740x600")
+        self.resizable(True, True)
+        self.grab_set()
+        self.lift()
+
+        self.match_api   = match_api
+        self.roster      = roster
+        self._puuids     = puuids_cache   # dict compartilhado {game#tag: puuid}
+        self._callback   = callback
+
+        self._check_vars: dict  = {}      # match_id -> BooleanVar
+        self._manual_mode       = False
+
+        self._build()
+        threading.Thread(target=self._load_matches, daemon=True).start()
+
+    # ── Layout ───────────────────────────────────────────────────────
+
+    def _build(self):
+        # Cabeçalho
+        hdr = tk.Frame(self, bg=BG_DARK, height=48)
+        hdr.pack(fill=tk.X, padx=10, pady=(10, 0))
+        hdr.pack_propagate(False)
+        tk.Label(hdr, text="⚔  Nova Sessão de Scrim",
+                 font=("Segoe UI", 13, "bold"),
+                 bg=BG_DARK, fg=TEXT_BRIGHT).pack(side=tk.LEFT, padx=14, pady=10)
+
+        # Campo adversário
+        opp_row = tk.Frame(self, bg=BG_DARKEST)
+        opp_row.pack(fill=tk.X, padx=14, pady=(12, 4))
+        tk.Label(opp_row, text="Adversário:",
+                 font=("Segoe UI", 10, "bold"),
+                 bg=BG_DARKEST, fg=TEXT_COLOR).pack(side=tk.LEFT, padx=(0, 8))
+        self._opp_var = tk.StringVar()
+        opp_entry = tk.Entry(opp_row, textvariable=self._opp_var,
+                             font=("Segoe UI", 10),
+                             bg=BG_LIGHT, fg=TEXT_COLOR,
+                             insertbackground=TEXT_COLOR,
+                             relief=tk.FLAT, bd=4, width=28)
+        opp_entry.pack(side=tk.LEFT)
+        opp_entry.focus_set()
+
+        # Legenda
+        tk.Label(self,
+                 text="Marque as partidas que fazem parte desta sessão de scrim:",
+                 font=("Segoe UI", 9, "bold"),
+                 bg=BG_DARKEST, fg=TEXT_DIM).pack(anchor="w", padx=14, pady=(8, 2))
+
+        # Lista scrollável
+        outer = tk.Frame(self, bg=BG_DARKEST)
+        outer.pack(fill=tk.BOTH, expand=True, padx=14, pady=(0, 4))
+
+        sb = tk.Scrollbar(outer, orient="vertical")
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self._list_canvas = tk.Canvas(outer, bg=BG_DARKEST,
+                                      highlightthickness=0,
+                                      yscrollcommand=sb.set)
+        self._list_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        sb.config(command=self._list_canvas.yview)
+
+        self._list_frame = tk.Frame(self._list_canvas, bg=BG_DARKEST)
+        self._win_id = self._list_canvas.create_window(
+            (0, 0), window=self._list_frame, anchor="nw"
+        )
+        self._list_frame.bind(
+            "<Configure>",
+            lambda e: self._list_canvas.configure(
+                scrollregion=self._list_canvas.bbox("all")))
+        self._list_canvas.bind(
+            "<Configure>",
+            lambda e: self._list_canvas.itemconfig(self._win_id, width=e.width))
+        self._list_canvas.bind(
+            "<MouseWheel>",
+            lambda e: self._list_canvas.yview_scroll(-1 * (e.delta // 120), "units"))
+
+        # Spinner inicial
+        self._status_lbl = tk.Label(
+            self._list_frame,
+            text="Buscando partidas recentes…",
+            font=("Segoe UI", 10), bg=BG_DARKEST, fg=ACCENT)
+        self._status_lbl.pack(pady=40)
+
+        # Rodapé
+        bot = tk.Frame(self, bg=BG_DARK)
+        bot.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+        self._notes_var = tk.StringVar()
+        tk.Label(bot, text="Notas:",
+                 font=("Segoe UI", 9), bg=BG_DARK, fg=TEXT_DIM
+                 ).pack(side=tk.LEFT, padx=(10, 4), pady=8)
+        tk.Entry(bot, textvariable=self._notes_var,
+                 font=("Segoe UI", 9),
+                 bg=BG_LIGHT, fg=TEXT_COLOR,
+                 insertbackground=TEXT_COLOR,
+                 relief=tk.FLAT, bd=3, width=26).pack(side=tk.LEFT, pady=8)
+
+        tk.Button(bot, text="✕ Cancelar",
+                  font=("Segoe UI", 9), bg=BG_MEDIUM, fg=TEXT_DIM,
+                  relief=tk.FLAT, cursor="hand2", padx=8, pady=4,
+                  command=self.destroy).pack(side=tk.RIGHT, padx=(0, 10), pady=8)
+
+        self._add_btn = tk.Button(
+            bot, text="＋ Adicionar Selecionadas",
+            font=("Segoe UI", 9, "bold"),
+            bg="#1a5f3f", fg=TEXT_COLOR,
+            relief=tk.FLAT, cursor="hand2", padx=10, pady=4,
+            command=self._confirm,
+            state=tk.DISABLED)
+        self._add_btn.pack(side=tk.RIGHT, padx=4, pady=8)
+
+    # ── Carregamento em background ────────────────────────────────────
+
+    def _load_matches(self):
+        """Resolve PUUID e busca histórico de partidas recentes."""
+        puuid = None
+        player_label = ""
+
+        # Usa PUUID já cacheado primeiro
+        for p in self.roster:
+            key = f"{p['game_name']}#{p['tag_line']}"
+            if key in self._puuids:
+                puuid = self._puuids[key]
+                player_label = p.get("display", p["game_name"])
+                break
+
+        # Se não cacheado, busca da API
+        if not puuid:
+            for p in self.roster:
+                try:
+                    fetched = self.match_api.get_puuid(p["game_name"], p["tag_line"])
+                    if fetched:
+                        key = f"{p['game_name']}#{p['tag_line']}"
+                        self._puuids[key] = fetched
+                        puuid = fetched
+                        player_label = p.get("display", p["game_name"])
+                        break
+                except Exception:
+                    pass
+
+        if not puuid:
+            self.after(0, self._show_manual_fallback,
+                       "Não foi possível obter o histórico de partidas.\n"
+                       "Verifique se o roster está configurado corretamente.")
+            return
+
+        self.after(0, lambda: self._status_lbl.config(
+            text=f"Buscando partidas recentes de {player_label}…"))
+
+        try:
+            # Busca as 30 partidas mais recentes (todos os modos)
+            match_ids = self.match_api.get_match_ids(puuid, count=30, queue=None)
+        except Exception as e:
+            self.after(0, self._show_manual_fallback, f"Erro ao buscar histórico: {e}")
+            return
+
+        if not match_ids:
+            self.after(0, self._show_manual_fallback,
+                       "Nenhuma partida encontrada no histórico.")
+            return
+
+        matches_info = []
+        total = len(match_ids)
+        for i, mid in enumerate(match_ids):
+            self.after(0, lambda i=i, t=total: self._status_lbl.config(
+                text=f"Carregando partidas… {i + 1}/{t}"))
+            try:
+                data = self.match_api.get_match_data(mid)
+                if data:
+                    matches_info.append((mid, data))
+            except Exception:
+                pass
+
+        if matches_info:
+            self.after(0, self._render_matches, matches_info, puuid)
+        else:
+            self.after(0, self._show_manual_fallback,
+                       "Não foi possível carregar os dados das partidas.")
+
+    # ── Renderização da lista ─────────────────────────────────────────
+
+    def _render_matches(self, matches_info: list, our_puuid: str):
+        """Renderiza partidas como linhas selecionáveis com checkbox."""
+        if self._status_lbl.winfo_exists():
+            self._status_lbl.destroy()
+
+        # Botões selecionar tudo / nenhum
+        ctrl = tk.Frame(self._list_frame, bg=BG_DARKEST)
+        ctrl.pack(fill=tk.X, pady=(0, 4))
+        tk.Button(ctrl, text="Selecionar todas",
+                  font=("Segoe UI", 8), bg=BG_LIGHT, fg=ACCENT,
+                  relief=tk.FLAT, cursor="hand2", padx=6,
+                  command=lambda: [v.set(True) for v in self._check_vars.values()]
+                  or self._update_add_btn()
+                  ).pack(side=tk.LEFT, padx=2)
+        tk.Button(ctrl, text="Limpar seleção",
+                  font=("Segoe UI", 8), bg=BG_LIGHT, fg=TEXT_DIM,
+                  relief=tk.FLAT, cursor="hand2", padx=6,
+                  command=lambda: [v.set(False) for v in self._check_vars.values()]
+                  or self._update_add_btn()
+                  ).pack(side=tk.LEFT, padx=2)
+
+        # Cabeçalho da tabela
+        th = tk.Frame(self._list_frame, bg=BG_MEDIUM)
+        th.pack(fill=tk.X, pady=(0, 2))
+        for txt, w in [("", 3), ("Data", 13), ("Duração", 7),
+                       ("Resultado", 9), ("Campeão", 14), ("Modo", 13)]:
+            tk.Label(th, text=txt, font=("Segoe UI", 8, "bold"),
+                     bg=BG_MEDIUM, fg=TEXT_DIM,
+                     width=w, anchor="w", padx=4).pack(side=tk.LEFT, pady=3)
+
+        for mid, data in matches_info:
+            info    = data.get("info", {})
+            dur_s   = info.get("gameDuration", 0)
+            dur_str = f"{dur_s // 60}:{dur_s % 60:02d}"
+            ts      = info.get("gameStartTimestamp", 0) // 1000
+            date_str = (datetime.fromtimestamp(ts).strftime("%d/%m  %H:%M")
+                        if ts else "?")
+            queue_id = info.get("queueId", 0)
+            q_str    = self.QUEUE_NAMES.get(queue_id, f"Modo {queue_id}")
+
+            our_won  = None
+            our_champ = "?"
+            for p in info.get("participants", []):
+                if p.get("puuid") == our_puuid:
+                    our_won   = p.get("win", False)
+                    our_champ = p.get("championName", "?")
+                    break
+
+            var = tk.BooleanVar(value=False)
+            self._check_vars[mid] = var
+
+            row_bg = (ROW_WIN  if our_won is True  else
+                      ROW_LOSS if our_won is False else BG_MEDIUM)
+
+            row = tk.Frame(self._list_frame, bg=row_bg)
+            row.pack(fill=tk.X, pady=1)
+
+            cb = tk.Checkbutton(row, variable=var,
+                                bg=row_bg, activebackground=row_bg,
+                                cursor="hand2",
+                                command=self._update_add_btn)
+            cb.pack(side=tk.LEFT, padx=4)
+
+            tk.Label(row, text=date_str,
+                     font=("Segoe UI", 8), bg=row_bg, fg=TEXT_DIM,
+                     width=13, anchor="w").pack(side=tk.LEFT)
+            tk.Label(row, text=dur_str,
+                     font=("Segoe UI", 8), bg=row_bg, fg=TEXT_COLOR,
+                     width=7, anchor="w").pack(side=tk.LEFT)
+
+            result_fg = (SUCCESS if our_won is True  else
+                         DANGER  if our_won is False else TEXT_DIM)
+            result_tx = ("✓ Vitória" if our_won is True  else
+                         "✕ Derrota" if our_won is False else "?")
+            tk.Label(row, text=result_tx,
+                     font=("Segoe UI", 8, "bold"), bg=row_bg, fg=result_fg,
+                     width=9, anchor="w").pack(side=tk.LEFT)
+
+            tk.Label(row, text=our_champ,
+                     font=("Segoe UI", 8), bg=row_bg, fg=ACCENT,
+                     width=14, anchor="w").pack(side=tk.LEFT)
+            tk.Label(row, text=q_str,
+                     font=("Segoe UI", 7), bg=row_bg, fg=TEXT_DIM,
+                     width=13, anchor="w").pack(side=tk.LEFT)
+
+            # Clique em qualquer parte da linha alterna o checkbox
+            def _toggle(e, v=var):
+                v.set(not v.get())
+                self._update_add_btn()
+
+            for w in [row] + list(row.winfo_children()):
+                try:
+                    if not isinstance(w, tk.Checkbutton):
+                        w.bind("<Button-1>", _toggle)
+                        w.config(cursor="hand2")
+                except Exception:
+                    pass
+
+    def _show_manual_fallback(self, msg: str = ""):
+        """Exibe campo de texto livre como alternativa quando a API falha."""
+        self._check_vars.clear()
+        self._manual_mode = True
+        for w in self._list_frame.winfo_children():
+            w.destroy()
+
+        if msg:
+            tk.Label(self._list_frame, text=msg,
+                     font=("Segoe UI", 9), bg=BG_DARKEST, fg=WARNING,
+                     justify="center").pack(pady=(14, 8))
+
+        tk.Label(self._list_frame,
+                 text="Cole os Match IDs abaixo (um por linha ou separados por vírgula):",
+                 font=("Segoe UI", 9), bg=BG_DARKEST, fg=TEXT_DIM
+                 ).pack(anchor="w", padx=6)
+
+        self._manual_text = tk.Text(
+            self._list_frame, height=6,
+            font=("Cascadia Code", 9),
+            bg=BG_LIGHT, fg=ACCENT,
+            insertbackground=ACCENT,
+            relief=tk.FLAT, bd=4)
+        self._manual_text.pack(fill=tk.X, padx=6, pady=6)
+        self._manual_text.bind("<KeyRelease>", lambda e: self._update_add_btn())
+        self._add_btn.config(state=tk.NORMAL)
+
+    # ── Helpers ───────────────────────────────────────────────────────
+
+    def _update_add_btn(self):
+        if self._manual_mode:
+            has = (hasattr(self, "_manual_text") and
+                   bool(self._manual_text.get("1.0", "end").strip()))
+        else:
+            has = any(v.get() for v in self._check_vars.values())
+        self._add_btn.config(state=tk.NORMAL if has else tk.DISABLED)
+
+    def _confirm(self):
+        opp = self._opp_var.get().strip()
+        if not opp:
+            messagebox.showwarning("Atenção",
+                                   "Informe o nome do time adversário.",
+                                   parent=self)
+            return
+
+        if self._manual_mode:
+            raw = self._manual_text.get("1.0", "end")
+            match_ids = [m.strip() for m in re.split(r"[,\s\n]+", raw) if m.strip()]
+        else:
+            match_ids = [mid for mid, var in self._check_vars.items() if var.get()]
+
+        if not match_ids:
+            messagebox.showwarning("Atenção",
+                                   "Selecione ao menos uma partida.",
+                                   parent=self)
+            return
+
+        notes = self._notes_var.get().strip()
+        self._callback(opp, match_ids, notes)
         self.destroy()
 
 
