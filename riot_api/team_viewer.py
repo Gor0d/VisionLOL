@@ -515,7 +515,7 @@ class PlayerCard(tk.Frame):
         role_lbl.pack(side=tk.LEFT, padx=(0, 8))
 
         # NOME
-        name_frame = tk.Frame(inner, bg=BG_DARK, width=150)
+        name_frame = tk.Frame(inner, bg=BG_DARK, width=220)
         name_frame.pack(side=tk.LEFT, padx=(0, 8), fill=tk.Y)
         name_frame.pack_propagate(False)
 
