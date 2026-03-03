@@ -3,6 +3,8 @@
 Ferramenta de análise e monitoramento de performance para times de League of Legends.
 Integração completa com a Riot Games API para acompanhamento de soloq, scrims e estatísticas individuais.
 
+![Team Viewer](docs/screenshots/team_viewer.png)
+
 ---
 
 ## Funcionalidades
@@ -13,22 +15,34 @@ Integração completa com a Riot Games API para acompanhamento de soloq, scrims 
 - Stats agregadas de todas as contas: WR%, KDA médio, top campeões e histórico das últimas partidas
 - Indicador ao vivo — detecta se o jogador está em partida no momento
 
+![Roster](docs/screenshots/roster.png)
+
 ### Radar de Performance
+
 - 6 métricas normalizadas por role: KDA · CS/min · Visão/min · Gold/min · Damage Share · Kill Participation
 - Benchmarks por role (TOP/JGL/MID/ADC/SUP) baseados em padrão pro/soloq alto
 - Radar individual por jogador e visão geral do time em grid
 
+![Performance Radar](docs/screenshots/radar.png)
+
 ### Dashboard de Partidas
+
 - Histórico detalhado das últimas partidas
 - Pool de campeões com WR% e KDA por campeão
 - Mapa de calor de atividade (heatmap) por partida, gerado a partir das timelines
 
+![Dashboard](docs/screenshots/dashboard.png)
+
 ### Replay Viewer
+
 - Visualização quadro a quadro das posições dos jogadores no mapa
 - Rastreamento de abates, objetivos e estruturas destruídas
 - Análise de ward lifetimes e movimentação por lane
 
+![Replay Viewer](docs/screenshots/replay.png)
+
 ### Scrims Dashboard
+
 - Registro e acompanhamento de sessões de scrim contra outros times
 - Comparativo de métricas por partida e por jogador
 
@@ -45,7 +59,7 @@ Integração completa com a Riot Games API para acompanhamento de soloq, scrims 
 
 ```bash
 # 1. Clone o repositório
-git clone https://github.com/seu-usuario/VisionLOL.git
+git clone https://github.com/Gor0d/VisionLOL.git
 cd VisionLOL
 
 # 2. Crie e ative o ambiente virtual
@@ -104,10 +118,7 @@ psutil
 ## Uso
 
 ```bash
-# Interface completa
 python instant_start.py
-
-# Ou via PyCharm: abra o projeto e execute instant_start.py
 ```
 
 Na aba **Time**, configure o roster com os Riot IDs dos jogadores (formato `NomeIngame#TAG`).
@@ -121,10 +132,12 @@ Os dados são carregados automaticamente da API.
 VisionLOL/
 ├── instant_start.py          # Ponto de entrada principal
 ├── gui_app_integrated.py     # GUI principal (notebook com abas)
-├── config.json               # Configuração local (NÃO commitar — está no .gitignore)
-├── config.example.json       # Template de configuração
+├── config.example.json       # Template de configuração (copie para config.json)
 ├── team_roster.json          # Roster do time (gerado automaticamente)
 ├── requirements.txt
+│
+├── docs/
+│   └── screenshots/          # Imagens do README
 │
 └── riot_api/
     ├── config.py             # Endpoints da Riot API

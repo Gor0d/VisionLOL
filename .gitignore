@@ -1,3 +1,6 @@
+# ─── Claude Code (IDE assistant) ─────────────────────────────────────────────
+.claude/
+
 # ─── Segredos / configuração local ───────────────────────────────────────────
 config.json          # NUNCA commitar — contém Riot API key
 .env
