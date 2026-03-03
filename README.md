@@ -142,10 +142,11 @@ Os dados são carregados automaticamente da API.
 
 ```
 VisionLOL/
-├── instant_start.py          # Ponto de entrada principal
-├── gui_app_integrated.py     # GUI principal (notebook com abas)
+├── gui_app_integrated.py     # Ponto de entrada — GUI principal (notebook com abas)
+├── main.py                   # PlayerMonitor (monitoramento de câmera/atenção)
+├── game_detector.py          # Detecção de processo do League of Legends
+├── logger.py                 # Logger centralizado
 ├── config.example.json       # Template de configuração (copie para config.json)
-├── team_roster.json          # Roster do time (gerado automaticamente)
 ├── requirements.txt
 │
 ├── docs/
@@ -155,16 +156,18 @@ VisionLOL/
     ├── config.py             # Endpoints da Riot API
     ├── riot_http.py          # Cliente HTTP com rate limiting
     ├── match_api.py          # Match-V5 + Account-V1 + Spectator-V5
+    ├── live_client.py        # Live Client API (dados em partida)
     ├── map_visualizer.py     # Download e renderização do minimap
-    ├── team_viewer.py        # Aba de roster do time
+    ├── team_viewer.py        # Aba de roster do time (customizável)
     ├── performance_radar.py  # Radar de performance (6 métricas)
     ├── dashboard_viewer.py   # Dashboard com heatmap
     ├── replay_viewer.py      # Replay quadro a quadro
     ├── replay_engine.py      # Motor de replay (timeline processing)
     ├── scrim_dashboard.py    # Dashboard de scrims
     ├── pathing_visualizer.py # Visualização de movimentação
-    ├── proximity_tracker.py  # Rastreamento de proximidade
-    └── reaction_analyzer.py  # Análise de tempo de reação
+    ├── proximity_tracker.py  # Rastreamento de proximidade ao vivo
+    ├── reaction_analyzer.py  # Análise de tempo de reação
+    └── data_correlator.py    # Correlação atenção × eventos do jogo
 ```
 
 ---
