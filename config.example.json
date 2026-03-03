@@ -1,0 +1,13 @@
+{
+    "riot_api_key": "RGAPI-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "game_name": "SeuNomeIngame",
+    "tag_line": "BR1",
+    "region": "br1",
+    "routing": "americas",
+    "proximity": {
+        "poll_interval": 0.5,
+        "gank_distance": 2000,
+        "gank_duration": 5.0
+    },
+    "auto_start_riot_tracking": true
+}

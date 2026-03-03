@@ -1,0 +1,48 @@
+[
+  {
+    "game_name": "Robo",
+    "tag_line": "ROBS",
+    "role": "TOP",
+    "display": "Robo"
+  },
+  {
+    "game_name": "PNG Caca",
+    "tag_line": "paiN",
+    "role": "JUNGLE",
+    "display": "PNG Caca",
+    "alt_accounts": [
+      {
+        "game_name": "PNG CarioK",
+        "tag_line": "CBLol"
+      }
+    ]
+  },
+  {
+    "game_name": "tinowns",
+    "tag_line": "BR2",
+    "role": "MID",
+    "display": "tinowns"
+  },
+  {
+    "game_name": "ナルト",
+    "tag_line": "2500",
+    "role": "ADC",
+    "display": "ナルト"
+  },
+  {
+    "game_name": "PAIN Kuri",
+    "tag_line": "LTAS",
+    "role": "SUPPORT",
+    "display": "PAIN Kuri",
+    "alt_accounts": [
+      {
+        "game_name": "Surround Sound",
+        "tag_line": "21S"
+      },
+      {
+        "game_name": "Kuri88",
+        "tag_line": "BR1"
+      }
+    ]
+  }
+]

@@ -1,0 +1,38 @@
+# ─── Segredos / configuração local ───────────────────────────────────────────
+config.json          # NUNCA commitar — contém Riot API key
+.env
+.env.*
+
+# ─── Cache de API e assets ────────────────────────────────────────────────────
+cache/               # JSONs de partidas cacheados automaticamente
+assets_cache/        # Ícones de campeões baixados do Data Dragon
+logs/
+
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ─── Ambiente virtual ─────────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ─── IDEs ─────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ─── SO ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
