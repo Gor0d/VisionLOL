@@ -129,6 +129,8 @@ def compute_player_metrics(summaries, match_data_cache: dict, puuid: str) -> dic
     for entry in summaries:
         if len(entry) == 3:
             match_id, _s, md = entry
+            if not md:   # pode ser None quando armazenado como placeholder
+                md = match_data_cache.get(match_id)
         else:
             match_id, _s = entry
             md = match_data_cache.get(match_id)

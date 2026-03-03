@@ -14,8 +14,7 @@ import time
 import json
 from PIL import Image, ImageTk
 
-# Adiciona o diretorio .venv ao path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '.venv'))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from game_detector import GameDetector
 from main import PlayerMonitor

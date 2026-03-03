@@ -150,13 +150,29 @@ class TeamViewer(tk.Frame):
         logo_frame = tk.Frame(hdr, bg=PAIN_BLUE)
         logo_frame.pack(side=tk.LEFT, padx=14, pady=8)
 
-        tk.Label(logo_frame, text="paiN",
-                 font=("Segoe UI", 18, "bold"),
-                 bg=PAIN_BLUE, fg=PAIN_GOLD).pack(side=tk.LEFT)
-        tk.Label(logo_frame, text=" Gaming",
-                 font=("Segoe UI", 18, "bold"),
-                 bg=PAIN_BLUE, fg=TEXT_BRIGHT).pack(side=tk.LEFT)
-        tk.Label(logo_frame, text="  ·  CBLOL  ·  BR1",
+        # Tenta carregar a logo da paiN Gaming de assets/pain_logo.png
+        self._pain_logo_ph = None
+        logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "pain_logo.png")
+        try:
+            logo_img = Image.open(logo_path).convert("RGBA")
+            # Calcula largura mantendo proporção para caber nos 42px de altura disponíveis
+            target_h = 42
+            ratio = target_h / logo_img.height
+            target_w = int(logo_img.width * ratio)
+            logo_img = logo_img.resize((target_w, target_h), Image.LANCZOS)
+            self._pain_logo_ph = ImageTk.PhotoImage(logo_img)
+            tk.Label(logo_frame, image=self._pain_logo_ph,
+                     bg=PAIN_BLUE).pack(side=tk.LEFT, padx=(0, 10))
+        except Exception:
+            # Fallback: texto caso a imagem não exista
+            tk.Label(logo_frame, text="paiN",
+                     font=("Segoe UI", 18, "bold"),
+                     bg=PAIN_BLUE, fg=PAIN_GOLD).pack(side=tk.LEFT)
+            tk.Label(logo_frame, text=" Gaming",
+                     font=("Segoe UI", 18, "bold"),
+                     bg=PAIN_BLUE, fg=TEXT_BRIGHT).pack(side=tk.LEFT)
+
+        tk.Label(logo_frame, text="CBLOL  ·  BR1",
                  font=("Segoe UI", 10),
                  bg=PAIN_BLUE, fg="#a8c4e0").pack(side=tk.LEFT, pady=4)
 
@@ -499,7 +515,7 @@ class PlayerCard(tk.Frame):
         role_lbl.pack(side=tk.LEFT, padx=(0, 8))
 
         # NOME
-        name_frame = tk.Frame(inner, bg=BG_DARK, width=120)
+        name_frame = tk.Frame(inner, bg=BG_DARK, width=150)
         name_frame.pack(side=tk.LEFT, padx=(0, 8), fill=tk.Y)
         name_frame.pack_propagate(False)
 
