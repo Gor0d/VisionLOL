@@ -8,8 +8,14 @@ config.json          # NUNCA commitar — contém Riot API key
 
 # ─── Cache de API e assets ────────────────────────────────────────────────────
 cache/               # JSONs de partidas cacheados automaticamente
+assets/              # Assets gerados automaticamente
 assets_cache/        # Ícones de campeões baixados do Data Dragon
 logs/
+
+# ─── Dados gerados automaticamente ───────────────────────────────────────────
+team_roster.json     # Gerado ao configurar o time
+scrims.json          # Gerado ao registrar scrims
+heatmap_preview.png  # Imagem gerada automaticamente
 
 # ─── Python ───────────────────────────────────────────────────────────────────
 __pycache__/

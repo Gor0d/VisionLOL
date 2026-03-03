@@ -130,7 +130,7 @@ psutil
 ## Uso
 
 ```bash
-python instant_start.py
+python gui_app_integrated.py
 ```
 
 Na aba **Time**, configure o roster com os Riot IDs dos jogadores (formato `NomeIngame#TAG`).
