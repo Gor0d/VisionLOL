@@ -25,7 +25,7 @@ Integração completa com a Riot Games API para acompanhamento de soloq, scrims 
 - Benchmarks por role (TOP/JGL/MID/ADC/SUP) baseados em padrão pro/soloq alto
 - Radar individual por jogador e visão geral do time em grid
 
-![Performance Radar](docs/screenshots/radar.png)
+![Performance Radar](docs/screenshots/Perfomance.png)
 
 ### Dashboard de Partidas
 
@@ -33,7 +33,7 @@ Integração completa com a Riot Games API para acompanhamento de soloq, scrims 
 - Pool de campeões com WR% e KDA por campeão
 - Mapa de calor de atividade (heatmap) por partida, gerado a partir das timelines
 
-![Dashboard](docs/screenshots/dashboard.png)
+![Dashboard](docs/screenshots/Dashboard.png)
 
 ### Replay Viewer
 
@@ -41,7 +41,7 @@ Integração completa com a Riot Games API para acompanhamento de soloq, scrims 
 - Rastreamento de abates, objetivos e estruturas destruídas
 - Análise de ward lifetimes e movimentação por lane
 
-![Replay Viewer](docs/screenshots/replay.png)
+![Replay Viewer](docs/screenshots/Replay.png)
 
 ### Scrims Dashboard
 
