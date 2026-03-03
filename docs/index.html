@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VisionLOL — Análise de Performance para Times de LoL</title>
+  <meta name="description" content="Ferramenta open source de análise e monitoramento de performance para times de League of Legends. Integração completa com a Riot Games API." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg0:      #0d1117;
+      --bg1:      #161b22;
+      --bg2:      #1c2129;
+      --bg3:      #21262d;
+      --border:   #30363d;
+      --accent:   #58a6ff;
+      --success:  #3fb950;
+      --danger:   #f85149;
+      --warning:  #d29922;
+      --text:     #e6edf3;
+      --dim:      #7d8590;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg0);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(13,17,23,.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 2rem; height: 56px;
+    }
+    .nav-brand { font-weight: 700; font-size: 1.1rem; color: var(--accent); text-decoration: none; }
+    .nav-links { display: flex; gap: 1.5rem; list-style: none; }
+    .nav-links a { color: var(--dim); text-decoration: none; font-size: .9rem; transition: color .2s; }
+    .nav-links a:hover { color: var(--text); }
+
+    /* ── HERO ── */
+    .hero {
+      text-align: center;
+      padding: 5rem 1.5rem 4rem;
+      background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(88,166,255,.12), transparent);
+    }
+    .hero img.banner {
+      max-width: min(780px, 100%);
+      border-radius: 12px;
+      margin-bottom: 2rem;
+      box-shadow: 0 8px 40px rgba(0,0,0,.6);
+    }
+    .hero p {
+      max-width: 600px; margin: 0 auto 2rem;
+      color: var(--dim); font-size: 1.1rem;
+    }
+    .btn-group { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: .5rem;
+      padding: .65rem 1.4rem; border-radius: 8px;
+      font-size: .95rem; font-weight: 600; text-decoration: none;
+      transition: opacity .2s, transform .15s;
+    }
+    .btn:hover { opacity: .85; transform: translateY(-1px); }
+    .btn-primary { background: var(--accent); color: #0d1117; }
+    .btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+
+    /* ── BADGES ── */
+    .badges { display: flex; gap: .6rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2.5rem; }
+    .badge {
+      font-size: .75rem; font-weight: 600; padding: .25rem .65rem;
+      border-radius: 20px; border: 1px solid;
+    }
+    .badge-blue   { color: var(--accent);   border-color: var(--accent);   background: rgba(88,166,255,.08); }
+    .badge-green  { color: var(--success);  border-color: var(--success);  background: rgba(63,185,80,.08); }
+    .badge-yellow { color: var(--warning);  border-color: var(--warning);  background: rgba(210,153,34,.08); }
+
+    /* ── SECTION ── */
+    section { padding: 4rem 1.5rem; }
+    .section-inner { max-width: 1100px; margin: 0 auto; }
+    .section-title {
+      font-size: 1.6rem; font-weight: 700; text-align: center;
+      margin-bottom: .5rem;
+    }
+    .section-sub {
+      text-align: center; color: var(--dim);
+      margin-bottom: 2.5rem; font-size: .95rem;
+    }
+
+    /* ── FEATURES GRID ── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+    }
+    .feature-card {
+      background: var(--bg1);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: border-color .2s, transform .2s;
+    }
+    .feature-card:hover { border-color: var(--accent); transform: translateY(-3px); }
+    .feature-card img {
+      width: 100%; display: block;
+      aspect-ratio: 16/9; object-fit: cover;
+      background: var(--bg2);
+    }
+    .feature-card-body { padding: 1.2rem; }
+    .feature-card-body h3 { font-size: 1rem; margin-bottom: .4rem; color: var(--text); }
+    .feature-card-body p  { font-size: .875rem; color: var(--dim); }
+
+    /* ── INSTALL ── */
+    #install { background: var(--bg1); }
+    .install-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.2rem; margin-bottom: 2rem;
+    }
+    .step {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.2rem;
+      display: flex; gap: .9rem; align-items: flex-start;
+    }
+    .step-num {
+      min-width: 32px; height: 32px;
+      background: var(--accent); color: #0d1117;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: .9rem; flex-shrink: 0;
+    }
+    .step h4 { font-size: .9rem; margin-bottom: .3rem; }
+    .step p  { font-size: .825rem; color: var(--dim); }
+    pre {
+      background: var(--bg0);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.2rem 1.4rem;
+      overflow-x: auto;
+      font-size: .85rem;
+      line-height: 1.7;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    code { color: var(--accent); font-family: "Cascadia Code", "Fira Code", Consolas, monospace; }
+    .comment { color: var(--dim); }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2rem 1.5rem;
+      text-align: center;
+      color: var(--dim);
+      font-size: .85rem;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    .footer-note { margin-top: .75rem; font-size: .78rem; color: #555; max-width: 640px; margin-inline: auto; }
+
+    @media (max-width: 600px) {
+      nav { padding: 0 1rem; }
+      .nav-links { display: none; }
+      .hero { padding: 3rem 1rem 2.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a class="nav-brand" href="#">VisionLOL</a>
+  <ul class="nav-links">
+    <li><a href="#features">Funcionalidades</a></li>
+    <li><a href="#install">Instalação</a></li>
+    <li><a href="https://github.com/Gor0d/VisionLOL" target="_blank">GitHub</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <img class="banner" src="screenshots/banner.png" alt="VisionLOL Banner" />
+
+  <div class="badges">
+    <span class="badge badge-blue">Python 3.10+</span>
+    <span class="badge badge-green">MIT License</span>
+    <span class="badge badge-yellow">Riot Games API</span>
+    <span class="badge badge-blue">Open Source</span>
+  </div>
+
+  <p>
+    Ferramenta de análise e monitoramento de performance para times de
+    League of Legends — roster, radar de métricas, replay, scrims e muito mais.
+  </p>
+
+  <div class="btn-group">
+    <a class="btn btn-primary"
+       href="https://github.com/Gor0d/VisionLOL/releases/latest"
+       target="_blank">
+      ⬇ Download
+    </a>
+    <a class="btn btn-secondary"
+       href="https://github.com/Gor0d/VisionLOL"
+       target="_blank">
+      ★ Ver no GitHub
+    </a>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="section-inner">
+    <h2 class="section-title">Funcionalidades</h2>
+    <p class="section-sub">Tudo que um coaching staff precisa em uma só ferramenta</p>
+
+    <div class="features-grid">
+
+      <div class="feature-card">
+        <img src="screenshots/roster.png" alt="Roster do Time" loading="lazy" />
+        <div class="feature-card-body">
+          <h3>Roster do Time</h3>
+          <p>Gerencie 5 jogadores com roles, múltiplas contas e indicador ao vivo de quem está em partida.</p>
+        </div>
+      </div>
+
+      <div class="feature-card">
+        <img src="screenshots/Performance.png" alt="Radar de Performance" loading="lazy" />
+        <div class="feature-card-body">
+          <h3>Radar de Performance</h3>
+          <p>6 métricas normalizadas por role — KDA, CS/min, Visão, Gold, Damage Share e Kill Participation.</p>
+        </div>
+      </div>
+
+      <div class="feature-card">
+        <img src="screenshots/Dashboard.png" alt="Dashboard de Partidas" loading="lazy" />
+        <div class="feature-card-body">
+          <h3>Dashboard de Partidas</h3>
+          <p>Histórico detalhado, pool de campeões com WR% e mapa de calor gerado a partir das timelines.</p>
+        </div>
+      </div>
+
+      <div class="feature-card">
+        <img src="screenshots/Replay.png" alt="Replay Viewer" loading="lazy" />
+        <div class="feature-card-body">
+          <h3>Replay Viewer</h3>
+          <p>Visualização quadro a quadro das posições dos jogadores, objetivos, wards e movimentação por lane.</p>
+        </div>
+      </div>
+
+      <div class="feature-card">
+        <img src="screenshots/Scrims.png" alt="Scrims Dashboard" loading="lazy" />
+        <div class="feature-card-body">
+          <h3>Scrims Dashboard</h3>
+          <p>Registro e comparativo de sessões de scrim contra adversários com métricas por partida.</p>
+        </div>
+      </div>
+
+      <div class="feature-card">
+        <img src="screenshots/team_viewer.png" alt="Team Viewer" loading="lazy" />
+        <div class="feature-card-body">
+          <h3>Customização do Time</h3>
+          <p>Banner com nome, legenda, cor e logo personalizada. Persiste automaticamente entre sessões.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- INSTALL -->
+<section id="install">
+  <div class="section-inner">
+    <h2 class="section-title">Instalação</h2>
+    <p class="section-sub">Pronto para uso em menos de 5 minutos</p>
+
+    <div class="install-steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div>
+          <h4>Clone o repositório</h4>
+          <p>Ou baixe o <a href="https://github.com/Gor0d/VisionLOL/releases/latest" style="color:var(--accent)">VisionLOL.exe</a> direto da release mais recente.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div>
+          <h4>Instale as dependências</h4>
+          <p>Python 3.10+ necessário. Um <code>pip install -r requirements.txt</code> resolve tudo.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div>
+          <h4>Configure a Riot API Key</h4>
+          <p>Copie <code>config.example.json</code> para <code>config.json</code> e insira sua chave do <a href="https://developer.riotgames.com" target="_blank" style="color:var(--accent)">developer.riotgames.com</a>.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div>
+          <h4>Execute</h4>
+          <p>Rode <code>python gui_app_integrated.py</code> e configure o roster na aba <strong>Time</strong>.</p>
+        </div>
+      </div>
+    </div>
+
+    <pre><code><span class="comment"># Clone</span>
+git clone https://github.com/Gor0d/VisionLOL.git
+cd VisionLOL
+
+<span class="comment"># Ambiente virtual</span>
+python -m venv .venv
+.venv\Scripts\activate
+
+<span class="comment"># Dependências</span>
+pip install -r requirements.txt
+
+<span class="comment"># Configuração</span>
+cp config.example.json config.json
+<span class="comment"># edite config.json com sua Riot API key</span>
+
+<span class="comment"># Iniciar</span>
+python gui_app_integrated.py</code></pre>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p>
+    Feito com Python ·
+    <a href="https://github.com/Gor0d/VisionLOL" target="_blank">GitHub</a> ·
+    <a href="https://github.com/Gor0d/VisionLOL/releases/latest" target="_blank">Download</a> ·
+    <a href="https://github.com/Gor0d/VisionLOL/blob/main/LICENSE" target="_blank">MIT License</a>
+  </p>
+  <p class="footer-note">
+    VisionLOL não é endossado pela Riot Games e não reflete as opiniões da Riot Games
+    ou de qualquer pessoa envolvida na produção de League of Legends.
+    League of Legends e Riot Games são marcas registradas da Riot Games, Inc.
+  </p>
+</footer>
+
+</body>
+</html>
