@@ -17,7 +17,11 @@ import json
 import os
 import re
 import math
-from datetime import datetime
+from datetime import datetime, timezone
+
+import requests
+
+from .config import load_config, save_config
 
 from .performance_radar import (
     compute_player_metrics,
@@ -615,6 +619,14 @@ class ScrimDashboard(tk.Toplevel):
                  font=("Segoe UI", 10), bg=BG_DARK, fg=ACCENT
                  ).pack(side=tk.RIGHT, padx=14)
 
+        tk.Button(sh, text="📤 Discord",
+                  font=("Segoe UI", 9, "bold"),
+                  bg="#5865F2", fg="#ffffff",
+                  relief=tk.FLAT, cursor="hand2",
+                  padx=10, pady=4,
+                  command=lambda s=sess: self._post_to_discord(s)
+                  ).pack(side=tk.RIGHT, padx=(0, 8))
+
         # Status de carregamento
         self._detail_status = tk.Label(
             self._detail_frame,
@@ -642,6 +654,10 @@ class ScrimDashboard(tk.Toplevel):
                        f"Carregando partida {i + 1}/{total}  ({mid})…")
             if mid in self._match_cache:
                 fetched[mid] = self._match_cache[mid]
+                continue
+            # IDs sintéticos (captura ao vivo) já estão no cache em memória;
+            # não tentamos buscá-los na Match V5 API
+            if mid.startswith("LIVE_"):
                 continue
             try:
                 data = self.match_api.get_match_data(mid)
@@ -1030,9 +1046,237 @@ class ScrimDashboard(tk.Toplevel):
         except Exception:
             pass
 
+    # ─────────────────────────────────────────────────────────────────
+    #  DISCORD WEBHOOK
+    # ─────────────────────────────────────────────────────────────────
+
+    def _post_to_discord(self, sess: dict):
+        """Abre o diálogo de configuração do webhook se necessário, depois posta."""
+        cfg = load_config()
+        webhook_url = cfg.get("discord_webhook", "").strip()
+
+        if not webhook_url:
+            _WebhookConfigDialog(self, on_save=lambda url: self._do_post(sess, url))
+            return
+
+        self._do_post(sess, webhook_url)
+
+    def _do_post(self, sess: dict, webhook_url: str):
+        """Monta e envia o embed para o Discord em thread de background."""
+        def _run():
+            try:
+                embed = self._build_discord_embed(sess)
+                resp = requests.post(
+                    webhook_url,
+                    json={"embeds": [embed]},
+                    timeout=8,
+                )
+                if resp.status_code in (200, 204):
+                    self.after(0, messagebox.showinfo,
+                               "Discord", "✓ Resultados postados com sucesso!")
+                elif resp.status_code == 404:
+                    self.after(0, messagebox.showerror,
+                               "Discord", "Webhook não encontrado (404).\n"
+                                          "Verifique a URL nas configurações.")
+                else:
+                    self.after(0, messagebox.showwarning,
+                               "Discord", f"Discord respondeu {resp.status_code}.")
+            except requests.exceptions.ConnectionError:
+                self.after(0, messagebox.showerror,
+                           "Discord", "Não foi possível conectar ao Discord.\n"
+                                      "Verifique sua conexão.")
+            except Exception as e:
+                self.after(0, messagebox.showerror, "Discord", str(e))
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _build_discord_embed(self, sess: dict) -> dict:
+        """Constrói o dict de embed do Discord com os resultados da sessão."""
+        match_ids = sess.get("match_ids", [])
+        opponent  = sess.get("opponent", "?")
+        date      = sess.get("date", "")[:10]
+        notes     = sess.get("notes", "")
+
+        # Agrega vitórias/derrotas usando o cache de partidas já carregado
+        wins = 0
+        losses = 0
+        our_puuids = set(self._puuids.values())
+        for mid in match_ids:
+            md = self._match_cache.get(mid)
+            if not md:
+                continue
+            for p in md.get("info", {}).get("participants", []):
+                if p.get("puuid") in our_puuids:
+                    if p.get("win"):
+                        wins += 1
+                    else:
+                        losses += 1
+                    break
+
+        result_str = f"{wins}V / {losses}D" if (wins + losses) > 0 else f"{len(match_ids)} partidas"
+
+        # Campos por jogador
+        player_fields = []
+        for player in self.roster:
+            key   = f"{player['game_name']}#{player['tag_line']}"
+            puuid = self._puuids.get(key)
+            if not puuid:
+                continue
+
+            kills = deaths = assists = 0
+            p_wins = 0
+            p_games = 0
+            champ_counts: dict = {}
+
+            for mid in match_ids:
+                md = self._match_cache.get(mid)
+                if not md:
+                    continue
+                for p in md.get("info", {}).get("participants", []):
+                    if p.get("puuid") == puuid:
+                        kills   += p.get("kills", 0)
+                        deaths  += p.get("deaths", 0)
+                        assists += p.get("assists", 0)
+                        if p.get("win"):
+                            p_wins += 1
+                        p_games += 1
+                        champ = p.get("championName", "")
+                        if champ:
+                            champ_counts[champ] = champ_counts.get(champ, 0) + 1
+                        break
+
+            if p_games == 0:
+                continue
+
+            kda    = (kills + assists) / max(deaths, 1)
+            wr_pct = round(p_wins / p_games * 100)
+            top_champ = max(champ_counts, key=champ_counts.get) if champ_counts else "?"
+            role = player.get("role", "")
+            name = player.get("display", player.get("game_name", key))
+            player_fields.append({
+                "name":   f"{name}  [{role}]",
+                "value":  f"{top_champ} · KDA {kda:.1f} · {wr_pct}% WR",
+                "inline": True,
+            })
+
+        fields = [
+            {"name": "📅 Data",      "value": date,        "inline": True},
+            {"name": "🎮 Partidas",  "value": str(len(match_ids)), "inline": True},
+            {"name": "📊 Resultado", "value": result_str,  "inline": True},
+        ]
+        if notes:
+            fields.append({"name": "📝 Notas", "value": notes, "inline": False})
+        fields.extend(player_fields)
+
+        return {
+            "title":       f"⚔  Scrim vs {opponent}",
+            "color":       0x58a6ff,
+            "fields":      fields,
+            "footer":      {"text": "VisionLOL"},
+            "timestamp":   datetime.now(timezone.utc).isoformat(),
+        }
+
     def _on_close(self):
         self._closed = True
         self.destroy()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  WEBHOOK CONFIG DIALOG
+# ═══════════════════════════════════════════════════════════════════════
+
+class _WebhookConfigDialog(tk.Toplevel):
+    """Diálogo para configurar a URL do webhook do Discord."""
+
+    def __init__(self, parent, on_save=None):
+        super().__init__(parent)
+        self.title("Configurar Discord Webhook")
+        self.configure(bg="#0d1117")
+        self.resizable(False, False)
+        self.grab_set()
+
+        self._on_save = on_save
+
+        tk.Label(self, text="URL do Webhook do Discord",
+                 font=("Segoe UI", 10, "bold"),
+                 bg="#0d1117", fg="#e6edf3").pack(padx=20, pady=(16, 4), anchor="w")
+
+        tk.Label(self,
+                 text="No Discord: Canal → Editar → Integrações → Webhooks → Copiar URL",
+                 font=("Segoe UI", 8), bg="#0d1117", fg="#7d8590"
+                 ).pack(padx=20, pady=(0, 6), anchor="w")
+
+        self._url_var = tk.StringVar()
+        # Pré-preenche com valor salvo
+        saved = load_config().get("discord_webhook", "")
+        self._url_var.set(saved)
+
+        entry = tk.Entry(self, textvariable=self._url_var,
+                         font=("Segoe UI", 9),
+                         bg="#21262d", fg="#e6edf3",
+                         insertbackground="#e6edf3",
+                         relief=tk.FLAT, bd=4, width=52)
+        entry.pack(padx=20, pady=(0, 10))
+
+        btn_row = tk.Frame(self, bg="#0d1117")
+        btn_row.pack(padx=20, pady=(0, 16), fill=tk.X)
+
+        tk.Button(btn_row, text="Salvar e Postar",
+                  font=("Segoe UI", 9, "bold"),
+                  bg="#5865F2", fg="#ffffff",
+                  relief=tk.FLAT, cursor="hand2", padx=14, pady=6,
+                  command=self._save).pack(side=tk.LEFT, padx=(0, 6))
+
+        tk.Button(btn_row, text="Testar",
+                  font=("Segoe UI", 9),
+                  bg="#21262d", fg="#58a6ff",
+                  relief=tk.FLAT, cursor="hand2", padx=14, pady=6,
+                  command=self._test).pack(side=tk.LEFT)
+
+        tk.Button(btn_row, text="Cancelar",
+                  font=("Segoe UI", 9),
+                  bg="#21262d", fg="#7d8590",
+                  relief=tk.FLAT, cursor="hand2", padx=14, pady=6,
+                  command=self.destroy).pack(side=tk.RIGHT)
+
+    def _save(self):
+        url = self._url_var.get().strip()
+        if not url:
+            messagebox.showwarning("Aviso", "URL não pode estar vazia.", parent=self)
+            return
+        cfg = load_config()
+        cfg["discord_webhook"] = url
+        save_config(cfg)
+        self.destroy()
+        if self._on_save:
+            self._on_save(url)
+
+    def _test(self):
+        url = self._url_var.get().strip()
+        if not url:
+            messagebox.showwarning("Aviso", "Cole a URL primeiro.", parent=self)
+            return
+
+        def _run():
+            try:
+                payload = {
+                    "embeds": [{
+                        "title": "✅ VisionLOL — Teste de Webhook",
+                        "description": "Webhook configurado com sucesso!",
+                        "color": 0x3fb950,
+                    }]
+                }
+                resp = requests.post(url, json=payload, timeout=6)
+                if resp.status_code in (200, 204):
+                    self.after(0, messagebox.showinfo,
+                               "Teste", "✓ Mensagem de teste enviada!")
+                else:
+                    self.after(0, messagebox.showwarning,
+                               "Teste", f"Discord respondeu {resp.status_code}.")
+            except Exception as e:
+                self.after(0, messagebox.showerror, "Erro", str(e))
+
+        threading.Thread(target=_run, daemon=True).start()
 
 
 # ═══════════════════════════════════════════════════════════════════════

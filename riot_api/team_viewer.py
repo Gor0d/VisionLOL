@@ -58,7 +58,7 @@ DEFAULT_ROSTER = [
 ]
 
 ROSTER_FILE = os.path.join(os.path.dirname(__file__), "..", "team_roster.json")
-ICON_SIZE   = 36   # ícone do campeão nos cards
+ICON_SIZE   = 40   # ícone do campeão nos cards
 HISTORY_N  = 10   # últimas N partidas para resumo
 
 
@@ -141,7 +141,7 @@ class TeamViewer(tk.Frame):
                 on_remove=self._on_remove_player,
                 on_save=self._save_roster,
             )
-            card.pack(fill=tk.X, pady=1)
+            card.pack(fill=tk.X, pady=3)
             self._player_cards.append(card)
 
         # Rodapé com agregados do time
@@ -495,7 +495,7 @@ class TeamViewer(tk.Frame):
                 on_remove=self._on_remove_player,
                 on_save=self._save_roster,
             )
-            card.pack(fill=tk.X, pady=1)
+            card.pack(fill=tk.X, pady=3)
             self._player_cards.append(card)
         self._refresh_all()
 
@@ -640,17 +640,19 @@ class PlayerCard(tk.Frame):
         content.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # ── LINHA PRINCIPAL ───────────────────────────────────────────
-        inner = tk.Frame(content, bg=BG_DARK)
-        inner.pack(fill=tk.X, padx=(6, 4), pady=(5, 3))
+        # height=66 garante espaço para ícone(40) + contagem(14) + folga
+        inner = tk.Frame(content, bg=BG_DARK, height=66)
+        inner.pack(fill=tk.X, padx=(6, 4), pady=(6, 4))
+        inner.pack_propagate(False)
 
         # ROLE
         role_lbl = tk.Label(inner, text=role[:3], font=("Segoe UI", 8, "bold"),
-                            bg=color, fg=BG_DARKEST, width=4, pady=1)
-        role_lbl.pack(side=tk.LEFT, padx=(0, 8))
+                            bg=color, fg=BG_DARKEST, width=4, pady=2)
+        role_lbl.pack(side=tk.LEFT, padx=(0, 8), pady=10)
 
         # NOME
-        name_frame = tk.Frame(inner, bg=BG_DARK, width=220)
-        name_frame.pack(side=tk.LEFT, padx=(0, 8), fill=tk.Y)
+        name_frame = tk.Frame(inner, bg=BG_DARK, width=240, height=56)
+        name_frame.pack(side=tk.LEFT, padx=(0, 8), pady=5)
         name_frame.pack_propagate(False)
 
         self._name_lbl = tk.Label(
@@ -668,8 +670,8 @@ class PlayerCard(tk.Frame):
         self._riot_id_lbl.pack(fill=tk.X)
 
         # TOP CAMPEÕES (3 ícones)
-        self._champ_frame = tk.Frame(inner, bg=BG_DARK, width=160)
-        self._champ_frame.pack(side=tk.LEFT, padx=(0, 8), fill=tk.Y)
+        self._champ_frame = tk.Frame(inner, bg=BG_DARK, width=192, height=60)
+        self._champ_frame.pack(side=tk.LEFT, padx=(0, 8), pady=3)
         self._champ_frame.pack_propagate(False)
 
         self._champ_loading = tk.Label(
@@ -721,6 +723,14 @@ class PlayerCard(tk.Frame):
         b_radar = _hbtn(btn_area, "🕸", self._open_radar, bg=BG_LIGHT, width=3)
         b_radar.pack(side=tk.LEFT, padx=2)
         _Tooltip(b_radar, "Radar de performance — KDA, CS/min, visão, gold, dano e kill participation")
+
+        b_evol = _hbtn(btn_area, "📈", self._open_evolution, bg=BG_LIGHT, width=3)
+        b_evol.pack(side=tk.LEFT, padx=2)
+        _Tooltip(b_evol, "Evolução temporal — KDA, CS/min e Vision/min ao longo das partidas")
+
+        b_pool = _hbtn(btn_area, "🏆", self._open_champion_pool, bg=BG_LIGHT, width=3)
+        b_pool.pack(side=tk.LEFT, padx=2)
+        _Tooltip(b_pool, "Champion pool — estatísticas por campeão")
 
         b_edit = _hbtn(btn_area, "✏", lambda: self._on_edit(self.player), bg=BG_LIGHT, width=3)
         b_edit.pack(side=tk.LEFT, padx=2)
@@ -872,10 +882,20 @@ class PlayerCard(tk.Frame):
             kda_col = SUCCESS if kda_v >= 3.0 else (WARNING if kda_v >= 2.0 else TEXT_DIM)
             self._kda_lbl.config(text=f"{kda_v:.1f} KDA", fg=kda_col)
 
-            # Top campeões (ícones)
+            # Top campeões (ícones) — slots criados na ordem correta antes das threads
             self._champ_loading.destroy()
             self._icon_refs.clear()
+            self._champ_slots = []
             for i, (champ, count) in enumerate(self.stats.get("top_champs", [])):
+                slot = tk.Frame(self._champ_frame, bg=BG_DARK)
+                slot.pack(side=tk.LEFT, padx=3)
+                # Placeholder de texto enquanto baixa o ícone
+                lbl_ph = tk.Label(slot, text=champ[:4], font=("Segoe UI", 7),
+                                  bg=BG_DARK, fg=TEXT_DIM)
+                lbl_ph.pack()
+                tk.Label(slot, text=f"{count}j", font=("Segoe UI", 7),
+                         bg=BG_DARK, fg=TEXT_DIM).pack()
+                self._champ_slots.append((slot, lbl_ph, champ, count))
                 threading.Thread(
                     target=self._load_champ_icon, args=(champ, count, i), daemon=True
                 ).start()
@@ -904,49 +924,49 @@ class PlayerCard(tk.Frame):
             pass
 
     def _load_champ_icon(self, champ: str, count: int, idx: int):
-        """Baixa ícone do campeão e atualiza no canvas principal."""
+        """Baixa ícone do campeão e preenche o slot correto (preserva ordem)."""
         try:
             img = self.map_viz._download_champion_icon(champ) if self.map_viz else None
             if img:
                 img = img.resize((ICON_SIZE, ICON_SIZE), Image.LANCZOS)
                 ph  = ImageTk.PhotoImage(img)
-                self.root_window.after(0, self._place_champ_icon, ph, champ, count)
+                self.root_window.after(0, self._place_champ_icon, ph, idx)
                 return
         except Exception:
             pass
-        # Fallback: exibe abreviação do nome do campeão
-        self.root_window.after(0, self._place_champ_text, champ, count)
+        # Fallback: atualiza o placeholder de texto já no slot
+        self.root_window.after(0, self._place_champ_text, idx)
 
-    def _place_champ_icon(self, ph, champ: str, count: int):
+    def _place_champ_icon(self, ph, idx: int):
+        """Substitui o placeholder do slot pelo ícone real."""
         if self._destroyed:
             return
         try:
-            self._icon_refs.append(ph)   # evita gc
-            f = tk.Frame(self._champ_frame, bg=BG_DARK)
-            f.pack(side=tk.LEFT, padx=3)
-            tk.Label(f, image=ph, bg=BG_DARK).pack()
-            tk.Label(f, text=f"{count}j", font=("Segoe UI", 7),
-                     bg=BG_DARK, fg=TEXT_DIM).pack()
+            if idx >= len(self._champ_slots):
+                return
+            slot, lbl_ph, champ, count = self._champ_slots[idx]
+            if not slot.winfo_exists():
+                return
+            self._icon_refs.append(ph)
+            lbl_ph.destroy()
+            tk.Label(slot, image=ph, bg=BG_DARK).pack()
         except tk.TclError:
             pass
 
-    def _place_champ_text(self, champ: str, count: int):
-        """Fallback quando o ícone do campeão não pôde ser baixado."""
+    def _place_champ_text(self, idx: int):
+        """Fallback — estiliza o placeholder de texto do slot."""
         if self._destroyed:
             return
         try:
+            if idx >= len(self._champ_slots):
+                return
+            slot, lbl_ph, champ, count = self._champ_slots[idx]
+            if not slot.winfo_exists():
+                return
             role  = self.player.get("role", "MID")
             color = ROLE_COLORS.get(role, ACCENT)
-            abbrev = champ[:4] if champ else "?"
-            f = tk.Frame(self._champ_frame, bg=BG_DARK)
-            f.pack(side=tk.LEFT, padx=3)
-            tk.Label(f, text=abbrev,
-                     font=("Segoe UI", 7, "bold"),
-                     bg=color, fg=BG_DARKEST,
-                     width=4, pady=3).pack()
-            tk.Label(f, text=f"{count}j",
-                     font=("Segoe UI", 7),
-                     bg=BG_DARK, fg=TEXT_DIM).pack()
+            lbl_ph.config(font=("Segoe UI", 7, "bold"),
+                          bg=color, fg=BG_DARKEST, width=4, pady=3)
         except tk.TclError:
             pass
 
@@ -1025,6 +1045,41 @@ class PlayerCard(tk.Frame):
             match_data_cache=cache,
             puuid=puuid,
             role=role,
+        )
+
+    def _open_evolution(self):
+        if not self.stats.get("puuid"):
+            messagebox.showinfo(
+                "Aguarde", "Dados ainda sendo carregados.\nTente novamente em alguns segundos.",
+                parent=self.root_window
+            )
+            return
+        from riot_api.evolution_viewer import EvolutionViewer
+        player_name = self.player.get("display", self.player.get("game_name", ""))
+        role        = self.player.get("role", "MID")
+        EvolutionViewer(
+            self.root_window,
+            match_api=self.match_api,
+            puuid=self.stats["puuid"],
+            player_name=player_name,
+            role=role,
+        )
+
+    def _open_champion_pool(self):
+        if not self.stats.get("puuid"):
+            messagebox.showinfo(
+                "Aguarde", "Dados ainda sendo carregados.\nTente novamente em alguns segundos.",
+                parent=self.root_window
+            )
+            return
+        from riot_api.champion_pool import ChampionPoolViewer
+        player_name = self.player.get("display", self.player.get("game_name", ""))
+        ChampionPoolViewer(
+            self.root_window,
+            match_api=self.match_api,
+            puuid=self.stats["puuid"],
+            player_name=player_name,
+            map_viz=self.map_viz,
         )
 
 

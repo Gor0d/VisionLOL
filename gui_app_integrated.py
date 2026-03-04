@@ -617,6 +617,105 @@ class VisionLOLAppIntegrated:
             activebackground=self.bg_medium, activeforeground=self.text
         ).pack(padx=15, pady=(0, 10))
 
+        # ── Servidor de Scrims ───────────────────────────────────────────
+        scrim_frame = tk.LabelFrame(main, text="Servidor de Scrims (VisionLOLAgent)",
+                                    bg=self.bg_medium, fg=self.text,
+                                    font=("Arial", 11, "bold"))
+        scrim_frame.pack(fill=tk.X, pady=(0, 10), padx=5)
+
+        scrim_cfg = self.user_config.get("scrim_server", {})
+
+        row_srv1 = tk.Frame(scrim_frame, bg=self.bg_medium)
+        row_srv1.pack(fill=tk.X, padx=15, pady=(10, 4))
+
+        self.cfg_scrim_enabled = tk.BooleanVar(value=scrim_cfg.get("enabled", False))
+        tk.Checkbutton(
+            row_srv1,
+            text="Ativar servidor embutido — permite receber capturas dos agentes",
+            variable=self.cfg_scrim_enabled,
+            font=("Arial", 10),
+            bg=self.bg_medium, fg=self.text,
+            selectcolor=self.bg_light,
+            activebackground=self.bg_medium, activeforeground=self.text
+        ).pack(side=tk.LEFT)
+
+        tk.Label(row_srv1, text="  Porta:", font=("Arial", 10),
+                 bg=self.bg_medium, fg=self.text).pack(side=tk.LEFT, padx=(12, 0))
+        self.cfg_scrim_port = tk.Entry(row_srv1, font=("Arial", 10),
+                                       bg=self.bg_light, fg=self.text,
+                                       insertbackground=self.text, width=6)
+        self.cfg_scrim_port.pack(side=tk.LEFT, padx=4)
+        self.cfg_scrim_port.insert(0, str(scrim_cfg.get("port", 7654)))
+
+        row_srv2 = tk.Frame(scrim_frame, bg=self.bg_medium)
+        row_srv2.pack(fill=tk.X, padx=15, pady=(0, 4))
+
+        tk.Label(row_srv2, text="Token:", font=("Arial", 10),
+                 bg=self.bg_medium, fg=self.text).pack(side=tk.LEFT)
+        self._scrim_token_var = tk.StringVar(value=scrim_cfg.get("token", ""))
+        tk.Entry(row_srv2, textvariable=self._scrim_token_var,
+                 font=("Arial", 9), bg=self.bg_light, fg=self.text_dim,
+                 state="readonly", width=36,
+                 readonlybackground=self.bg_light).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            row_srv2, text="Regenerar",
+            command=self._regenerate_scrim_token,
+            font=("Arial", 9), bg=self.bg_light, fg=self.text,
+            cursor="hand2", bd=0, padx=8, pady=2
+        ).pack(side=tk.LEFT, padx=(0, 6))
+
+        tk.Button(
+            row_srv2, text="Copiar Config Agente",
+            command=self._copy_agent_config_from_settings,
+            font=("Arial", 9), bg=self.accent, fg=self.text,
+            cursor="hand2", bd=0, padx=8, pady=2
+        ).pack(side=tk.LEFT)
+
+        import socket as _socket
+        try:
+            _ip = _socket.gethostbyname(_socket.gethostname())
+        except Exception:
+            _ip = "127.0.0.1"
+        _port = scrim_cfg.get("port", 7654)
+        self._scrim_url_lbl = tk.Label(
+            scrim_frame,
+            text=f"URL Local: http://{_ip}:{_port}",
+            font=("Arial", 9), bg=self.bg_medium, fg=self.text_dim
+        )
+        self._scrim_url_lbl.pack(padx=15, pady=(0, 10), anchor="w")
+
+        # ── Discord Webhook ──────────────────────────────────────────────
+        discord_frame = tk.LabelFrame(main, text="Integracoes — Discord",
+                                      bg=self.bg_medium, fg=self.text,
+                                      font=("Arial", 11, "bold"))
+        discord_frame.pack(fill=tk.X, pady=(0, 10), padx=5)
+
+        row_dc1 = tk.Frame(discord_frame, bg=self.bg_medium)
+        row_dc1.pack(fill=tk.X, padx=15, pady=(10, 4))
+
+        tk.Label(row_dc1, text="Webhook URL:", font=("Arial", 10),
+                 bg=self.bg_medium, fg=self.text).pack(side=tk.LEFT)
+
+        self.cfg_discord_webhook = tk.Entry(row_dc1, font=("Arial", 9),
+                                            bg=self.bg_light, fg=self.text,
+                                            insertbackground=self.text, width=48)
+        self.cfg_discord_webhook.pack(side=tk.LEFT, padx=8)
+        self.cfg_discord_webhook.insert(0, self.user_config.get("discord_webhook", ""))
+
+        tk.Button(
+            row_dc1, text="Testar",
+            command=self._test_discord_webhook,
+            font=("Arial", 9), bg=self.accent, fg=self.text,
+            cursor="hand2", bd=0, padx=10, pady=2
+        ).pack(side=tk.LEFT)
+
+        tk.Label(
+            discord_frame,
+            text="ℹ  Canal do Discord → Editar Canal → Integrações → Webhooks → Copiar URL",
+            font=("Arial", 8), bg=self.bg_medium, fg=self.text_dim
+        ).pack(padx=15, pady=(0, 10), anchor="w")
+
         # Botao salvar
         save_btn = tk.Button(
             main, text="Salvar Configuracoes", command=self._save_config,
@@ -1560,6 +1659,18 @@ class VisionLOLAppIntegrated:
         except ValueError:
             messagebox.showwarning("Aviso", "Gank distance deve ser inteiro e Poll interval deve ser decimal.\nValores anteriores mantidos.")
 
+        # Servidor de scrims
+        self.user_config.setdefault("scrim_server", {})
+        self.user_config["scrim_server"]["enabled"] = self.cfg_scrim_enabled.get()
+        try:
+            self.user_config["scrim_server"]["port"] = int(self.cfg_scrim_port.get().strip())
+        except ValueError:
+            self.user_config["scrim_server"]["port"] = 7654
+        self.user_config["scrim_server"]["token"] = self._scrim_token_var.get()
+
+        # Discord webhook
+        self.user_config["discord_webhook"] = self.cfg_discord_webhook.get().strip()
+
         save_config(self.user_config)
 
         # Atualiza http client com nova key
@@ -1571,11 +1682,101 @@ class VisionLOLAppIntegrated:
         self.tag_entry.delete(0, tk.END)
         self.tag_entry.insert(0, self.user_config["tag_line"])
 
+        # Propaga mudança do servidor de scrims para a instância em execução
+        if hasattr(self, "scrim_server") and self.scrim_server:
+            new_enabled = self.user_config["scrim_server"]["enabled"]
+            new_token   = self.user_config["scrim_server"]["token"]
+            if new_enabled and not self.scrim_server.is_running:
+                self.scrim_server.token = new_token
+                try:
+                    self.scrim_server.start()
+                except Exception as e:
+                    logger.warning(f"Não foi possível iniciar servidor: {e}")
+            elif not new_enabled and self.scrim_server.is_running:
+                self.scrim_server.stop()
+
+        # Atualiza label de URL local
+        import socket as _socket
+        try:
+            _ip = _socket.gethostbyname(_socket.gethostname())
+        except Exception:
+            _ip = "127.0.0.1"
+        _port = self.user_config["scrim_server"]["port"]
+        if hasattr(self, "_scrim_url_lbl") and self._scrim_url_lbl.winfo_exists():
+            self._scrim_url_lbl.config(text=f"URL Local: http://{_ip}:{_port}")
+
         messagebox.showinfo("Sucesso", "Configuracoes salvas com sucesso!")
 
     # ===================================================================
     #  CLEANUP
     # ===================================================================
+
+    def _regenerate_scrim_token(self):
+        """Gera um novo token UUID para o servidor de scrims."""
+        import uuid
+        self._scrim_token_var.set(str(uuid.uuid4()))
+
+    def _copy_agent_config_from_settings(self):
+        """Copia o JSON de configuração do agente para o clipboard."""
+        import socket as _socket, json as _json
+        try:
+            ip = _socket.gethostbyname(_socket.gethostname())
+        except Exception:
+            ip = "127.0.0.1"
+        try:
+            port = int(self.cfg_scrim_port.get().strip())
+        except ValueError:
+            port = 7654
+        token = self._scrim_token_var.get()
+        cfg = {
+            "server_url": f"http://{ip}:{port}",
+            "auth_token": token,
+            "player_riot_id": ""
+        }
+        text = _json.dumps(cfg, indent=2, ensure_ascii=False)
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        messagebox.showinfo("Copiado",
+                            "Config do agente copiada!\nCole no VisionLOLAgent ao configurar.")
+
+    def _test_discord_webhook(self):
+        """Envia um embed de exemplo de resultado de scrim para o webhook Discord."""
+        url = self.cfg_discord_webhook.get().strip()
+        if not url:
+            messagebox.showwarning("Aviso", "Cole a URL do webhook primeiro.")
+            return
+        import requests as _requests
+        from datetime import datetime, timezone as _tz
+        def _run():
+            try:
+                payload = {
+                    "embeds": [{
+                        "title": "⚔  Scrim vs Team Alpha  *(exemplo)*",
+                        "color": 0x58a6ff,
+                        "fields": [
+                            {"name": "📅 Data",       "value": "2026-03-03",  "inline": True},
+                            {"name": "🎮 Partidas",   "value": "3",           "inline": True},
+                            {"name": "📊 Resultado",  "value": "**2V / 1D**", "inline": True},
+                            {"name": "Kami  [MID]",   "value": "Azir · KDA 4.2 · 67% WR",   "inline": True},
+                            {"name": "Kuri88  [ADC]", "value": "Jinx · KDA 6.1 · 100% WR",  "inline": True},
+                            {"name": "CarioK  [JG]",  "value": "Vi · KDA 3.8 · 67% WR",     "inline": True},
+                            {"name": "Snow  [TOP]",   "value": "Renekton · KDA 2.9 · 33% WR","inline": True},
+                            {"name": "Surr  [SUP]",   "value": "Nautilus · KDA 5.0 · 67% WR","inline": True},
+                        ],
+                        "footer": {"text": "VisionLOL · Este é um resultado de exemplo"},
+                        "timestamp": datetime.now(_tz.utc).isoformat(),
+                    }]
+                }
+                r = _requests.post(url, json=payload, timeout=6)
+                if r.status_code in (200, 204):
+                    self.root.after(0, messagebox.showinfo, "Discord",
+                                    "✓ Embed de exemplo enviado!\nVerifique o canal do Discord.")
+                else:
+                    self.root.after(0, messagebox.showwarning, "Discord",
+                                    f"Discord respondeu {r.status_code}.")
+            except Exception as e:
+                self.root.after(0, messagebox.showerror, "Erro", str(e))
+        threading.Thread(target=_run, daemon=True).start()
 
     def _init_scrim_server(self) -> "ScrimServer | None":
         """Cria e (opcionalmente) inicia o servidor de scrims."""

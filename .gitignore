@@ -16,6 +16,7 @@ logs/
 team_roster.json     # Gerado ao configurar o time
 scrims.json          # Gerado ao registrar scrims
 heatmap_preview.png  # Imagem gerada automaticamente
+scrim_captures/      # Capturas ao vivo do VisionLOLAgent
 
 # ─── Python ───────────────────────────────────────────────────────────────────
 __pycache__/

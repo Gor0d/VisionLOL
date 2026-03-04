@@ -27,6 +27,18 @@ Integração completa com a Riot Games API para acompanhamento de soloq, scrims 
 
 ![Performance Radar](docs/screenshots/Performance.png)
 
+### Evolução Temporal do Jogador *(novo)*
+
+- Gráfico de linha mostrando a evolução de KDA, CS/min e Vision/min ao longo das últimas 20 partidas
+- Linha de benchmark de role para referência
+- Pontos coloridos por resultado (vitória/derrota) com tooltip interativo
+
+### Champion Pool por Jogador *(novo)*
+
+- Tabela com estatísticas por campeão: partidas, WR%, KDA médio, CS/min, Vision/min
+- Ícones de campeão carregados automaticamente
+- Exportação da tabela para clipboard (tab-separated)
+
 ### Dashboard de Partidas
 
 - Histórico detalhado das últimas partidas
@@ -46,9 +58,28 @@ Integração completa com a Riot Games API para acompanhamento de soloq, scrims 
 ### Scrims Dashboard
 
 - Registro e acompanhamento de sessões de scrim contra outros times
+- Seletor visual de partidas recentes (sem precisar de Match ID)
 - Comparativo de métricas por partida e por jogador
+- Integração com Discord Webhook — posta resultados formatados direto no canal do time *(novo)*
 
 ![Scrims Dashboard](docs/screenshots/Scrims.png)
+
+### Captura de Scrims com Custom Games *(novo)*
+
+Para partidas personalizadas (não visíveis na Match V5 API), o VisionLOL usa uma arquitetura distribuída:
+
+- **VisionLOL.exe** — servidor embutido que recebe dados dos agentes (porta 7654)
+- **VisionLOLAgent.exe** — app leve instalado no PC de cada jogador; monitora a Live Client API durante a partida e envia os dados automaticamente ao fim do jogo
+
+```
+[PC Jogador 1]  VisionLOLAgent ─┐
+[PC Jogador 2]  VisionLOLAgent ─┤  HTTP POST
+[PC Jogador 3]  VisionLOLAgent ─┼──► VisionLOL (servidor :7654)
+[PC Jogador 4]  VisionLOLAgent ─┤         ↓
+[PC Jogador 5]  VisionLOLAgent ─┘   Scrims Dashboard
+```
+
+Compatível com LAN e internet. Autenticação por token Bearer gerado automaticamente.
 
 ---
 
@@ -79,6 +110,7 @@ pip install -r requirements.txt
 # 4. Configure a API key
 cp config.example.json config.json
 # Edite config.json e insira sua Riot API key
+# (ou configure diretamente na aba Config do app)
 ```
 
 ### Dependências principais
@@ -88,6 +120,7 @@ Pillow
 requests
 numpy
 opencv-contrib-python
+flask
 pynput
 psutil
 ```
@@ -99,7 +132,9 @@ psutil
 1. Acesse [developer.riotgames.com](https://developer.riotgames.com)
 2. Faça login com sua conta Riot
 3. Gere uma **Development API Key** (válida por 24h) ou solicite uma **Personal/Production Key**
-4. Cole a chave no `config.json`:
+4. Cole a chave no app — aba **Config** → campo **API Key** → Salvar
+
+Ou diretamente no `config.json`:
 
 ```json
 {
@@ -108,12 +143,12 @@ psutil
     "tag_line": "BR1",
     "region": "br1",
     "routing": "americas",
-    "proximity": {
-        "poll_interval": 0.5,
-        "gank_distance": 2000,
-        "gank_duration": 5.0
-    },
-    "auto_start_riot_tracking": true
+    "discord_webhook": "",
+    "scrim_server": {
+        "enabled": false,
+        "port": 7654,
+        "token": ""
+    }
 }
 ```
 
@@ -136,38 +171,51 @@ python gui_app_integrated.py
 Na aba **Time**, configure o roster com os Riot IDs dos jogadores (formato `NomeIngame#TAG`).
 Os dados são carregados automaticamente da API.
 
+Para cada jogador, os botões de ação disponíveis são:
+- **📊** Dashboard de partidas (heatmap, histórico)
+- **🕸** Radar de performance (6 métricas vs. benchmarks de role)
+- **📈** Evolução temporal (KDA, CS/min, Vision/min ao longo do tempo)
+- **🏆** Champion pool (estatísticas por campeão)
+
 ---
 
 ## Estrutura do Projeto
 
 ```
 VisionLOL/
-├── gui_app_integrated.py     # Ponto de entrada — GUI principal (notebook com abas)
-├── main.py                   # PlayerMonitor (monitoramento de câmera/atenção)
-├── game_detector.py          # Detecção de processo do League of Legends
-├── logger.py                 # Logger centralizado
-├── config.example.json       # Template de configuração (copie para config.json)
+├── gui_app_integrated.py      # Ponto de entrada — GUI principal
+├── main.py                    # PlayerMonitor (monitoramento de câmera/atenção)
+├── game_detector.py           # Detecção de processo do League of Legends
+├── logger.py                  # Logger centralizado
+├── config.example.json        # Template de configuração
 ├── requirements.txt
 │
+├── agent/
+│   ├── agent_main.py          # VisionLOLAgent — app de captura por jogador
+│   └── agent_config.py        # Gerenciamento de config do agente
+│
 ├── docs/
-│   └── screenshots/          # Imagens do README
+│   └── screenshots/           # Imagens do README
 │
 └── riot_api/
-    ├── config.py             # Endpoints da Riot API
-    ├── riot_http.py          # Cliente HTTP com rate limiting
-    ├── match_api.py          # Match-V5 + Account-V1 + Spectator-V5
-    ├── live_client.py        # Live Client API (dados em partida)
-    ├── map_visualizer.py     # Download e renderização do minimap
-    ├── team_viewer.py        # Aba de roster do time (customizável)
-    ├── performance_radar.py  # Radar de performance (6 métricas)
-    ├── dashboard_viewer.py   # Dashboard com heatmap
-    ├── replay_viewer.py      # Replay quadro a quadro
-    ├── replay_engine.py      # Motor de replay (timeline processing)
-    ├── scrim_dashboard.py    # Dashboard de scrims
-    ├── pathing_visualizer.py # Visualização de movimentação
-    ├── proximity_tracker.py  # Rastreamento de proximidade ao vivo
-    ├── reaction_analyzer.py  # Análise de tempo de reação
-    └── data_correlator.py    # Correlação atenção × eventos do jogo
+    ├── config.py              # Endpoints e config da Riot API
+    ├── riot_http.py           # Cliente HTTP com rate limiting
+    ├── match_api.py           # Match-V5 + Account-V1 + Spectator-V5
+    ├── live_client.py         # Live Client API (dados em partida)
+    ├── map_visualizer.py      # Download e renderização do minimap
+    ├── team_viewer.py         # Aba de roster do time
+    ├── performance_radar.py   # Radar de performance (6 métricas)
+    ├── evolution_viewer.py    # Evolução temporal (gráfico de linha)
+    ├── champion_pool.py       # Champion pool por jogador
+    ├── dashboard_viewer.py    # Dashboard com heatmap
+    ├── replay_viewer.py       # Replay quadro a quadro
+    ├── replay_engine.py       # Motor de replay (timeline processing)
+    ├── scrim_dashboard.py     # Dashboard de scrims + Discord webhook
+    ├── scrim_server.py        # Servidor Flask embutido (captura ao vivo)
+    ├── pathing_visualizer.py  # Visualização de movimentação
+    ├── proximity_tracker.py   # Rastreamento de proximidade ao vivo
+    ├── reaction_analyzer.py   # Análise de tempo de reação
+    └── data_correlator.py     # Correlação atenção × eventos do jogo
 ```
 
 ---
