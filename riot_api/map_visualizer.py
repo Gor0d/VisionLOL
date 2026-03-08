@@ -182,6 +182,31 @@ class MapVisualizer:
             for k in to_remove:
                 del self._champion_icons[k]
 
+    def _download_item_icon(self, item_id: int):
+        """Baixa e cacheia ícone de item pelo ID. Retorna PIL Image ou None."""
+        if not item_id:
+            return None
+        cache_path = os.path.join(CACHE_DIR, "items", f"{item_id}.png")
+        os.makedirs(os.path.join(CACHE_DIR, "items"), exist_ok=True)
+
+        if os.path.exists(cache_path):
+            try:
+                return Image.open(cache_path).convert("RGBA")
+            except Exception:
+                pass
+
+        patch = self._get_patch_version()
+        url   = f"https://ddragon.leagueoflegends.com/cdn/{patch}/img/item/{item_id}.png"
+        try:
+            resp = requests.get(url, timeout=10)
+            resp.raise_for_status()
+            img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+            img.save(cache_path)
+            return img
+        except Exception as e:
+            logger.debug(f"Ícone do item {item_id} não encontrado: {e}")
+            return None
+
     def _game_to_map_coords(self, game_x, game_y, map_size):
         """Converte coordenadas do jogo para coordenadas na imagem do mapa"""
         # X do jogo -> X da imagem (proporcional)

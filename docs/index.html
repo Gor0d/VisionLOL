@@ -3,182 +3,506 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VisionLOL — Análise de Performance para Times de LoL</title>
+  <title>VisionLOL — Sistema de Análise de Performance</title>
   <meta name="description" content="Ferramenta open source de análise e monitoramento de performance para times de League of Legends. Integração completa com a Riot Games API." />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=Bebas+Neue&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg0:      #0d1117;
-      --bg1:      #161b22;
-      --bg2:      #1c2129;
-      --bg3:      #21262d;
-      --border:   #30363d;
-      --accent:   #58a6ff;
-      --success:  #3fb950;
-      --danger:   #f85149;
-      --warning:  #d29922;
-      --text:     #e6edf3;
-      --dim:      #7d8590;
+      --void:             #000000;
+      --void-warm:        #0A0A08;
+      --void-panel:       #111110;
+      --void-raised:      #181816;
+
+      --nerv-orange:      #FF9830;
+      --nerv-orange-dim:  #D08028;
+      --nerv-orange-hot:  #FFCC50;
+
+      --data-green:       #50FF50;
+      --data-green-dim:   #30BB30;
+      --data-green-faint: rgba(80,255,80,0.07);
+
+      --wire-cyan:        #20F0FF;
+      --wire-cyan-dim:    #10A8B8;
+      --wire-cyan-glow:   rgba(32,240,255,0.12);
+
+      --alert-red:        #FF4840;
+      --alert-red-dim:    #CC3028;
+      --alert-red-fill:   rgba(255,72,64,0.14);
+
+      --steel:            #E0E0D8;
+      --steel-dim:        #9A9A90;
+      --steel-faint:      rgba(224,224,216,0.06);
+
+      --border:           #2A2A28;
+      --border-hot:       #3A3A38;
+
+      --font-sys:   'IBM Plex Mono', 'Courier New', monospace;
+      --font-label: 'Bebas Neue', 'Arial Narrow', sans-serif;
     }
 
     html { scroll-behavior: smooth; }
 
     body {
-      background: var(--bg0);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--void);
+      color: var(--steel);
+      font-family: var(--font-sys);
       line-height: 1.6;
+      position: relative;
     }
+
+    /* ── CRT TEXTURE ── */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.055) 2px, rgba(0,0,0,0.055) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.45) 100%);
+      pointer-events: none;
+      z-index: 9998;
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      body { animation: phosphor 0.1s infinite; }
+    }
+    @keyframes phosphor { 0%,100% { opacity:1; } 50% { opacity:0.985; } }
+
+    /* ── MEASUREMENT MARKS ── */
+    .corner-marks {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9997;
+    }
+    .corner-marks::before, .corner-marks::after {
+      content: '';
+      position: absolute;
+      width: 20px; height: 20px;
+      border-color: var(--nerv-orange-dim);
+      border-style: solid;
+      opacity: 0.4;
+    }
+    .corner-marks::before { top:12px; left:12px; border-width: 2px 0 0 2px; }
+    .corner-marks::after  { bottom:12px; right:12px; border-width: 0 2px 2px 0; }
 
     /* ── NAV ── */
     nav {
       position: sticky; top: 0; z-index: 100;
-      background: rgba(13,17,23,.92);
-      backdrop-filter: blur(12px);
+      background: rgba(0,0,0,0.96);
       border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between;
-      padding: 0 2rem; height: 56px;
+      padding: 0 2rem; height: 52px;
     }
-    .nav-brand { font-weight: 700; font-size: 1.1rem; color: var(--accent); text-decoration: none; }
-    .nav-links { display: flex; gap: 1.5rem; list-style: none; }
-    .nav-links a { color: var(--dim); text-decoration: none; font-size: .9rem; transition: color .2s; }
-    .nav-links a:hover { color: var(--text); }
+    .nav-brand {
+      font-family: var(--font-label);
+      font-size: 1.5rem;
+      letter-spacing: 0.15em;
+      color: var(--nerv-orange);
+      text-decoration: none;
+    }
+    .nav-sub {
+      font-size: 0.55rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--nerv-orange-dim);
+      margin-left: 0.6rem;
+      vertical-align: middle;
+    }
+    .nav-links { display: flex; gap: 2rem; list-style: none; }
+    .nav-links a {
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--steel-dim);
+      text-decoration: none;
+      transition: color .15s;
+    }
+    .nav-links a:hover { color: var(--nerv-orange); }
 
     /* ── HERO ── */
     .hero {
-      text-align: center;
-      padding: 5rem 1.5rem 4rem;
-      background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(88,166,255,.12), transparent);
+      min-height: 92vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 4rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
     }
-    .hero img.banner {
-      max-width: min(780px, 100%);
-      border-radius: 12px;
+    .hero-grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(var(--steel-faint) 1px, transparent 1px),
+        linear-gradient(90deg, var(--steel-faint) 1px, transparent 1px);
+      background-size: 60px 60px;
+      opacity: 0.5;
+    }
+    .hero-inner { position: relative; z-index: 1; text-align: center; max-width: 900px; }
+
+    .sys-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--nerv-orange-dim);
+      margin-bottom: 0.4rem;
+    }
+    .sys-label-jp {
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 0.7rem;
+      color: var(--steel-dim);
+      letter-spacing: 0.05em;
+    }
+
+    .hero-title {
+      font-family: var(--font-label);
+      font-size: clamp(3.5rem, 10vw, 7rem);
+      letter-spacing: 0.1em;
+      color: var(--nerv-orange);
+      line-height: 1;
+      margin: 0.5rem 0;
+    }
+    .hero-subtitle {
+      font-size: 0.8rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--wire-cyan);
       margin-bottom: 2rem;
-      box-shadow: 0 8px 40px rgba(0,0,0,.6);
     }
-    .hero p {
-      max-width: 600px; margin: 0 auto 2rem;
-      color: var(--dim); font-size: 1.1rem;
+
+    .status-bar {
+      display: flex; gap: 2rem; justify-content: center;
+      margin: 1.5rem 0 2.5rem;
+      flex-wrap: wrap;
     }
+    .status-item {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 0.2rem;
+    }
+    .status-val {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--data-green);
+      letter-spacing: -0.02em;
+    }
+    .status-lbl {
+      font-size: 0.55rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--nerv-orange-dim);
+    }
+    .status-sep { width: 1px; background: var(--border); align-self: stretch; }
+
+    .hero-banner {
+      width: 100%; max-width: 780px;
+      border: 1px solid var(--border);
+      display: block;
+      margin: 0 auto 2.5rem;
+      filter: saturate(0.8) contrast(1.05);
+    }
+
     .btn-group { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
     .btn {
       display: inline-flex; align-items: center; gap: .5rem;
-      padding: .65rem 1.4rem; border-radius: 8px;
-      font-size: .95rem; font-weight: 600; text-decoration: none;
-      transition: opacity .2s, transform .15s;
+      padding: .55rem 1.6rem;
+      font-family: var(--font-sys);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      text-decoration: none;
+      border: 1px solid;
+      transition: background .15s, color .15s;
     }
-    .btn:hover { opacity: .85; transform: translateY(-1px); }
-    .btn-primary { background: var(--accent); color: #0d1117; }
-    .btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
-
-    /* ── BADGES ── */
-    .badges { display: flex; gap: .6rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2.5rem; }
-    .badge {
-      font-size: .75rem; font-weight: 600; padding: .25rem .65rem;
-      border-radius: 20px; border: 1px solid;
+    .btn-primary {
+      background: var(--nerv-orange);
+      color: var(--void);
+      border-color: var(--nerv-orange);
     }
-    .badge-blue   { color: var(--accent);   border-color: var(--accent);   background: rgba(88,166,255,.08); }
-    .badge-green  { color: var(--success);  border-color: var(--success);  background: rgba(63,185,80,.08); }
-    .badge-yellow { color: var(--warning);  border-color: var(--warning);  background: rgba(210,153,34,.08); }
+    .btn-primary:hover { background: var(--nerv-orange-hot); border-color: var(--nerv-orange-hot); }
+    .btn-secondary {
+      background: transparent;
+      color: var(--wire-cyan);
+      border-color: var(--wire-cyan-dim);
+    }
+    .btn-secondary:hover { background: var(--wire-cyan-glow); }
 
-    /* ── SECTION ── */
-    section { padding: 4rem 1.5rem; }
+    /* ── SECTION BASE ── */
+    section { padding: 5rem 1.5rem; border-bottom: 1px solid var(--border); }
     .section-inner { max-width: 1100px; margin: 0 auto; }
+    .section-header { margin-bottom: 3rem; }
+    .section-id {
+      font-size: 0.6rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--nerv-orange-dim);
+      margin-bottom: 0.3rem;
+    }
     .section-title {
-      font-size: 1.6rem; font-weight: 700; text-align: center;
-      margin-bottom: .5rem;
+      font-family: var(--font-label);
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      letter-spacing: 0.1em;
+      color: var(--nerv-orange);
+      line-height: 1;
+      margin-bottom: 0.5rem;
     }
     .section-sub {
-      text-align: center; color: var(--dim);
-      margin-bottom: 2.5rem; font-size: .95rem;
+      font-size: 0.75rem;
+      color: var(--steel-dim);
+      letter-spacing: 0.06em;
+      max-width: 500px;
     }
 
-    /* ── FEATURES GRID ── */
+    /* ── FEATURES ── */
+    #features { background: var(--void-warm); }
     .features-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 1.5rem;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1px;
+      border: 1px solid var(--border);
     }
     .feature-card {
-      background: var(--bg1);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      overflow: hidden;
-      transition: border-color .2s, transform .2s;
+      background: var(--void);
+      padding: 1.4rem;
+      border: none;
+      position: relative;
+      transition: background .15s;
     }
-    .feature-card:hover { border-color: var(--accent); transform: translateY(-3px); }
+    .feature-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--nerv-orange-dim);
+      opacity: 0;
+      transition: opacity .15s;
+    }
+    .feature-card:hover { background: var(--void-panel); }
+    .feature-card:hover::before { opacity: 1; }
+
     .feature-card img {
       width: 100%; display: block;
       aspect-ratio: 16/9; object-fit: cover;
-      background: var(--bg2);
+      background: var(--void-panel);
+      border: 1px solid var(--border);
+      margin-bottom: 1rem;
+      filter: saturate(0.75);
     }
-    .feature-card-body { padding: 1.2rem; }
-    .feature-card-body h3 { font-size: 1rem; margin-bottom: .4rem; color: var(--text); }
-    .feature-card-body p  { font-size: .875rem; color: var(--dim); }
+    .feature-icon {
+      aspect-ratio: 16/9;
+      background: var(--void-panel);
+      border: 1px solid var(--border);
+      margin-bottom: 1rem;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.2rem;
+      position: relative;
+    }
+    .feature-icon::after {
+      content: attr(data-id);
+      position: absolute; bottom: 6px; right: 8px;
+      font-size: 0.5rem; letter-spacing: 0.1em;
+      color: var(--nerv-orange-dim);
+    }
+    .feature-id {
+      font-size: 0.55rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--nerv-orange-dim);
+      margin-bottom: 0.3rem;
+    }
+    .feature-card h3 {
+      font-family: var(--font-sys);
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--steel);
+      margin-bottom: 0.5rem;
+    }
+    .feature-card p {
+      font-size: 0.75rem;
+      color: var(--steel-dim);
+      line-height: 1.65;
+    }
 
     /* ── INSTALL ── */
-    #install { background: var(--bg1); }
+    #install { background: var(--void); }
     .install-steps {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 1.2rem; margin-bottom: 2rem;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1px;
+      border: 1px solid var(--border);
+      margin-bottom: 2.5rem;
     }
     .step {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1.2rem;
-      display: flex; gap: .9rem; align-items: flex-start;
+      background: var(--void-warm);
+      padding: 1.4rem;
+      display: flex; gap: 1rem; align-items: flex-start;
+      position: relative;
+    }
+    .step::after {
+      content: '';
+      position: absolute; bottom: 0; left: 1.4rem; right: 1.4rem;
+      height: 1px; background: var(--border);
     }
     .step-num {
-      min-width: 32px; height: 32px;
-      background: var(--accent); color: #0d1117;
-      border-radius: 50%; display: flex; align-items: center; justify-content: center;
-      font-weight: 700; font-size: .9rem; flex-shrink: 0;
+      font-family: var(--font-label);
+      font-size: 2rem;
+      color: var(--nerv-orange);
+      line-height: 1;
+      min-width: 2rem;
+      letter-spacing: 0.05em;
     }
-    .step h4 { font-size: .9rem; margin-bottom: .3rem; }
-    .step p  { font-size: .825rem; color: var(--dim); }
+    .step h4 {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--steel);
+      margin-bottom: 0.4rem;
+    }
+    .step p { font-size: 0.72rem; color: var(--steel-dim); line-height: 1.6; }
+    .step a { color: var(--wire-cyan); text-decoration: none; }
+    .step a:hover { text-decoration: underline; }
+
     pre {
-      background: var(--bg0);
+      background: var(--void-warm);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1.2rem 1.4rem;
+      border-left: 3px solid var(--nerv-orange-dim);
+      padding: 1.4rem 1.6rem;
       overflow-x: auto;
-      font-size: .85rem;
-      line-height: 1.7;
-      max-width: 700px;
+      font-size: 0.78rem;
+      line-height: 1.8;
+      max-width: 680px;
       margin: 0 auto;
     }
-    code { color: var(--accent); font-family: "Cascadia Code", "Fira Code", Consolas, monospace; }
-    .comment { color: var(--dim); }
+    code { color: var(--data-green); font-family: var(--font-sys); }
+    .comment { color: var(--steel-dim); }
+    .prompt { color: var(--nerv-orange-dim); }
+
+    /* ── METRICS STRIP ── */
+    .metrics-strip {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      border: 1px solid var(--border);
+      margin-bottom: 3rem;
+    }
+    .metric-cell {
+      padding: 1.2rem 0.8rem;
+      border-right: 1px solid var(--border);
+      text-align: center;
+    }
+    .metric-cell:last-child { border-right: none; }
+    .metric-val {
+      font-family: var(--font-label);
+      font-size: 2rem;
+      color: var(--data-green);
+      letter-spacing: 0.05em;
+      display: block;
+    }
+    .metric-lbl {
+      font-size: 0.55rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--nerv-orange-dim);
+      margin-top: 0.2rem;
+    }
+
+    /* ── SYSTEM STATUS ── */
+    .sys-status {
+      display: flex; gap: 2rem; align-items: center;
+      padding: 0.8rem 1.2rem;
+      border: 1px solid var(--data-green-dim);
+      background: var(--data-green-faint);
+      margin-bottom: 2.5rem;
+      max-width: 680px;
+      margin-inline: auto;
+    }
+    .sys-dot {
+      width: 8px; height: 8px;
+      background: var(--data-green);
+      box-shadow: 0 0 8px var(--data-green);
+      flex-shrink: 0;
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .sys-dot { animation: blink 1.6s ease-in-out infinite; }
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .sys-status span {
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--data-green);
+    }
+    .sys-status .jp {
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 0.7rem;
+      color: var(--steel-dim);
+      letter-spacing: 0.05em;
+      margin-left: auto;
+    }
 
     /* ── FOOTER ── */
     footer {
+      background: var(--void-warm);
       border-top: 1px solid var(--border);
-      padding: 2rem 1.5rem;
-      text-align: center;
-      color: var(--dim);
-      font-size: .85rem;
+      padding: 2.5rem 1.5rem;
     }
-    footer a { color: var(--accent); text-decoration: none; }
-    footer a:hover { text-decoration: underline; }
-    .footer-note { margin-top: .75rem; font-size: .78rem; color: #555; max-width: 640px; margin-inline: auto; }
+    .footer-inner {
+      max-width: 1100px; margin: 0 auto;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      flex-wrap: wrap; gap: 1.5rem;
+    }
+    .footer-brand {
+      font-family: var(--font-label);
+      font-size: 1.4rem;
+      color: var(--nerv-orange);
+      letter-spacing: 0.15em;
+    }
+    .footer-links { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    .footer-links a {
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--wire-cyan);
+      text-decoration: none;
+    }
+    .footer-links a:hover { text-decoration: underline; }
+    .footer-note {
+      width: 100%;
+      font-size: 0.65rem;
+      color: var(--steel-dim);
+      opacity: 0.6;
+      border-top: 1px solid var(--border);
+      padding-top: 1.2rem;
+      margin-top: 1rem;
+      line-height: 1.7;
+    }
 
-    @media (max-width: 600px) {
+    @media (max-width: 640px) {
       nav { padding: 0 1rem; }
       .nav-links { display: none; }
-      .hero { padding: 3rem 1rem 2.5rem; }
+      .hero { padding: 3rem 1rem 2.5rem; min-height: 80vh; }
+      .metrics-strip { grid-template-columns: repeat(3, 1fr); }
+      .footer-inner { flex-direction: column; }
     }
   </style>
 </head>
 <body>
 
+<div class="corner-marks"></div>
+
 <!-- NAV -->
 <nav>
-  <a class="nav-brand" href="#">VisionLOL</a>
+  <a class="nav-brand" href="#">VisionLOL<span class="nav-sub">// OPS CONSOLE</span></a>
   <ul class="nav-links">
-    <li><a href="#features">Funcionalidades</a></li>
+    <li><a href="#features">Módulos</a></li>
     <li><a href="#install">Instalação</a></li>
     <li><a href="https://github.com/Gor0d/VisionLOL" target="_blank">GitHub</a></li>
   </ul>
@@ -186,112 +510,150 @@
 
 <!-- HERO -->
 <section class="hero">
-  <img class="banner" src="screenshots/banner.png" alt="VisionLOL Banner" />
+  <div class="hero-grid"></div>
+  <div class="hero-inner">
 
-  <div class="badges">
-    <span class="badge badge-blue">Python 3.10+</span>
-    <span class="badge badge-green">MIT License</span>
-    <span class="badge badge-yellow">Riot Games API</span>
-    <span class="badge badge-blue">Open Source</span>
-  </div>
+    <div class="sys-label">SISTEMA DE ANÁLISE // LEAGUE OF LEGENDS</div>
+    <div class="sys-label-jp">パフォーマンス解析システム — バージョン 2.0</div>
 
-  <p>
-    Ferramenta de análise e monitoramento de performance para times de
-    League of Legends — roster, radar de métricas, replay, scrims e muito mais.
-  </p>
+    <h1 class="hero-title">VisionLOL</h1>
+    <p class="hero-subtitle">Performance Analysis Platform · Riot API Integration</p>
 
-  <div class="btn-group">
-    <a class="btn btn-primary"
-       href="https://github.com/Gor0d/VisionLOL/releases/latest"
-       target="_blank">
-      ⬇ Download
-    </a>
-    <a class="btn btn-secondary"
-       href="https://github.com/Gor0d/VisionLOL"
-       target="_blank">
-      ★ Ver no GitHub
-    </a>
+    <img class="hero-banner" src="screenshots/banner.png" alt="VisionLOL interface" />
+
+    <div class="status-bar">
+      <div class="status-item">
+        <span class="status-val">9</span>
+        <span class="status-lbl">Módulos</span>
+      </div>
+      <div class="status-sep"></div>
+      <div class="status-item">
+        <span class="status-val">6</span>
+        <span class="status-lbl">Métricas</span>
+      </div>
+      <div class="status-sep"></div>
+      <div class="status-item">
+        <span class="status-val">5v5</span>
+        <span class="status-lbl">Matchup</span>
+      </div>
+      <div class="status-sep"></div>
+      <div class="status-item">
+        <span class="status-val">MIT</span>
+        <span class="status-lbl">Licença</span>
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <a class="btn btn-primary"
+         href="https://github.com/Gor0d/VisionLOL/releases/latest"
+         target="_blank">⬇ Download</a>
+      <a class="btn btn-secondary"
+         href="https://github.com/Gor0d/VisionLOL"
+         target="_blank">★ Ver no GitHub</a>
+    </div>
+
   </div>
 </section>
 
 <!-- FEATURES -->
 <section id="features">
   <div class="section-inner">
-    <h2 class="section-title">Funcionalidades</h2>
-    <p class="section-sub">Tudo que um coaching staff precisa em uma só ferramenta</p>
+    <div class="section-header">
+      <div class="section-id">SYS.MODULES // モジュール一覧</div>
+      <h2 class="section-title">Módulos do Sistema</h2>
+      <p class="section-sub">Tudo que um coaching staff precisa em uma única plataforma operacional.</p>
+    </div>
+
+    <div class="metrics-strip">
+      <div class="metric-cell">
+        <span class="metric-val">KDA</span>
+        <span class="metric-lbl">Kill Ratio</span>
+      </div>
+      <div class="metric-cell">
+        <span class="metric-val">CS</span>
+        <span class="metric-lbl">Minions/min</span>
+      </div>
+      <div class="metric-cell">
+        <span class="metric-val">VIS</span>
+        <span class="metric-lbl">Vision/min</span>
+      </div>
+      <div class="metric-cell">
+        <span class="metric-val">GOLD</span>
+        <span class="metric-lbl">Gold/min</span>
+      </div>
+      <div class="metric-cell">
+        <span class="metric-val">DMG</span>
+        <span class="metric-lbl">Dmg Share</span>
+      </div>
+      <div class="metric-cell">
+        <span class="metric-val">KILL</span>
+        <span class="metric-lbl">Kill Part.</span>
+      </div>
+    </div>
 
     <div class="features-grid">
 
       <div class="feature-card">
         <img src="screenshots/roster.png" alt="Roster do Time" loading="lazy" />
-        <div class="feature-card-body">
-          <h3>Roster do Time</h3>
-          <p>Gerencie 5 jogadores com roles, múltiplas contas e indicador ao vivo de quem está em partida.</p>
-        </div>
+        <div class="feature-id">SYS.01 // ロースター</div>
+        <h3>Roster do Time</h3>
+        <p>Gerencie 5 jogadores com roles, múltiplas contas e indicador ao vivo de quem está em partida.</p>
       </div>
 
       <div class="feature-card">
         <img src="screenshots/Performance.png" alt="Radar de Performance" loading="lazy" />
-        <div class="feature-card-body">
-          <h3>Radar de Performance</h3>
-          <p>6 métricas normalizadas por role — KDA, CS/min, Visão, Gold, Damage Share e Kill Participation.</p>
-        </div>
+        <div class="feature-id">SYS.02 // 性能レーダー</div>
+        <h3>Radar de Performance</h3>
+        <p>6 métricas normalizadas por role — KDA, CS/min, Visão, Gold, Damage Share e Kill Participation.</p>
       </div>
 
       <div class="feature-card">
-        <img src="screenshots/Dashboard.png" alt="Dashboard de Partidas" loading="lazy" />
-        <div class="feature-card-body">
-          <h3>Dashboard de Partidas</h3>
-          <p>Histórico detalhado, pool de campeões com WR% e mapa de calor gerado a partir das timelines.</p>
-        </div>
+        <img src="screenshots/Dashboard.png" alt="Dashboard" loading="lazy" />
+        <div class="feature-id">SYS.03 // ダッシュボード</div>
+        <h3>Dashboard de Partidas</h3>
+        <p>Histórico detalhado com matchup 5v5, build do jogador e mapa de calor gerado via timelines.</p>
       </div>
 
       <div class="feature-card">
         <img src="screenshots/Replay.png" alt="Replay Viewer" loading="lazy" />
-        <div class="feature-card-body">
-          <h3>Replay Viewer</h3>
-          <p>Visualização quadro a quadro das posições dos jogadores, objetivos, wards e movimentação por lane.</p>
-        </div>
+        <div class="feature-id">SYS.04 // リプレイ</div>
+        <h3>Replay Viewer</h3>
+        <p>Visualização quadro a quadro das posições, objetivos, wards e movimentação por lane.</p>
       </div>
 
       <div class="feature-card">
         <img src="screenshots/Scrims.png" alt="Scrims Dashboard" loading="lazy" />
-        <div class="feature-card-body">
-          <h3>Scrims Dashboard</h3>
-          <p>Registro e comparativo de sessões de scrim contra adversários. Posta resultados direto no Discord com um clique.</p>
-        </div>
+        <div class="feature-id">SYS.05 // スクリム</div>
+        <h3>Scrims Dashboard</h3>
+        <p>Registro e comparativo de sessões de scrim. Posta resultados direto no Discord com um clique.</p>
       </div>
 
       <div class="feature-card">
-        <img src="screenshots/team_viewer.png" alt="Team Viewer" loading="lazy" />
-        <div class="feature-card-body">
-          <h3>Customização do Time</h3>
-          <p>Banner com nome, legenda, cor e logo personalizada. Persiste automaticamente entre sessões.</p>
-        </div>
+        <div class="feature-icon" data-id="SYS.06">⚔</div>
+        <div class="feature-id">SYS.06 // 比較</div>
+        <h3>Comparação de Jogadores</h3>
+        <p>Radar duplo sobreposto com painel de métricas ▲/▼ lado a lado — qualquer par do roster.</p>
       </div>
 
       <div class="feature-card">
-        <div style="aspect-ratio:16/9;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:2.5rem;">📈</div>
-        <div class="feature-card-body">
-          <h3>Evolução Temporal</h3>
-          <p>Gráfico de linha com KDA, CS/min e Vision/min ao longo das últimas 20 partidas — com benchmark de role e tooltip interativo.</p>
-        </div>
+        <div class="feature-icon" data-id="SYS.07">📈</div>
+        <div class="feature-id">SYS.07 // 時系列</div>
+        <h3>Evolução Temporal</h3>
+        <p>Gráfico de linha com KDA, CS/min e Vision/min nas últimas 20 partidas — benchmark por role.</p>
       </div>
 
       <div class="feature-card">
-        <div style="aspect-ratio:16/9;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:2.5rem;">🏆</div>
-        <div class="feature-card-body">
-          <h3>Champion Pool</h3>
-          <p>Tabela de estatísticas por campeão: partidas jogadas, WR%, KDA médio, CS/min e Vision/min.</p>
-        </div>
+        <div class="feature-icon" data-id="SYS.08">🏆</div>
+        <div class="feature-id">SYS.08 // チャンピオン</div>
+        <h3>Champion Pool</h3>
+        <p>Tabela completa por campeão: partidas, WR%, KDA médio, CS/min e Vision/min.</p>
       </div>
 
       <div class="feature-card">
-        <div style="aspect-ratio:16/9;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:2.5rem;">🤖</div>
-        <div class="feature-card-body">
-          <h3>Captura de Custom Games</h3>
-          <p>VisionLOLAgent instalado no PC de cada jogador captura partidas personalizadas via Live Client API e envia ao servidor do coach em tempo real.</p>
-        </div>
+        <div class="feature-icon" data-id="SYS.09">🤖</div>
+        <div class="feature-id">SYS.09 // エージェント</div>
+        <h3>Captura de Custom Games</h3>
+        <p>VisionLOLAgent instalado no PC de cada jogador envia dados de scrims ao servidor do coach em tempo real.</p>
       </div>
 
     </div>
@@ -301,33 +663,42 @@
 <!-- INSTALL -->
 <section id="install">
   <div class="section-inner">
-    <h2 class="section-title">Instalação</h2>
-    <p class="section-sub">Pronto para uso em menos de 5 minutos</p>
+    <div class="section-header">
+      <div class="section-id">DEPLOY.PROTOCOL // 展開手順</div>
+      <h2 class="section-title">Instalação</h2>
+      <p class="section-sub">Operacional em menos de 5 minutos.</p>
+    </div>
+
+    <div class="sys-status">
+      <div class="sys-dot"></div>
+      <span>Sistema Operacional — Riot API Integrada</span>
+      <span class="jp">システム稼動中</span>
+    </div>
 
     <div class="install-steps">
       <div class="step">
-        <div class="step-num">1</div>
+        <div class="step-num">01</div>
         <div>
           <h4>Clone o repositório</h4>
-          <p>Ou baixe o <a href="https://github.com/Gor0d/VisionLOL/releases/latest" style="color:var(--accent)">VisionLOL.exe</a> direto da release mais recente.</p>
+          <p>Ou baixe o <a href="https://github.com/Gor0d/VisionLOL/releases/latest">VisionLOL.exe</a> direto da release mais recente.</p>
         </div>
       </div>
       <div class="step">
-        <div class="step-num">2</div>
+        <div class="step-num">02</div>
         <div>
           <h4>Instale as dependências</h4>
-          <p>Python 3.10+ necessário. Um <code>pip install -r requirements.txt</code> resolve tudo.</p>
+          <p>Python 3.10+ necessário. Execute <code>pip install -r requirements.txt</code>.</p>
         </div>
       </div>
       <div class="step">
-        <div class="step-num">3</div>
+        <div class="step-num">03</div>
         <div>
           <h4>Configure a Riot API Key</h4>
-          <p>Copie <code>config.example.json</code> para <code>config.json</code> e insira sua chave do <a href="https://developer.riotgames.com" target="_blank" style="color:var(--accent)">developer.riotgames.com</a>.</p>
+          <p>Obtenha sua chave em <a href="https://developer.riotgames.com" target="_blank">developer.riotgames.com</a> e insira no <code>config.json</code>.</p>
         </div>
       </div>
       <div class="step">
-        <div class="step-num">4</div>
+        <div class="step-num">04</div>
         <div>
           <h4>Execute</h4>
           <p>Rode <code>python gui_app_integrated.py</code> e configure o roster na aba <strong>Time</strong>.</p>
@@ -335,38 +706,44 @@
       </div>
     </div>
 
-    <pre><code><span class="comment"># Clone</span>
-git clone https://github.com/Gor0d/VisionLOL.git
-cd VisionLOL
+    <pre><code><span class="comment"># // CLONE</span>
+<span class="prompt">$</span> git clone https://github.com/Gor0d/VisionLOL.git
+<span class="prompt">$</span> cd VisionLOL
 
-<span class="comment"># Ambiente virtual</span>
-python -m venv .venv
-.venv\Scripts\activate
+<span class="comment"># // AMBIENTE VIRTUAL</span>
+<span class="prompt">$</span> python -m venv .venv
+<span class="prompt">$</span> .venv\Scripts\activate
 
-<span class="comment"># Dependências</span>
-pip install -r requirements.txt
+<span class="comment"># // DEPENDÊNCIAS</span>
+<span class="prompt">$</span> pip install -r requirements.txt
 
-<span class="comment"># Configuração</span>
-cp config.example.json config.json
+<span class="comment"># // CONFIGURAÇÃO</span>
+<span class="prompt">$</span> cp config.example.json config.json
 <span class="comment"># edite config.json com sua Riot API key</span>
 
-<span class="comment"># Iniciar</span>
-python gui_app_integrated.py</code></pre>
+<span class="comment"># // INICIAR</span>
+<span class="prompt">$</span> python gui_app_integrated.py</code></pre>
   </div>
 </section>
 
 <!-- FOOTER -->
 <footer>
-  <p>
-    Feito com Python ·
-    <a href="https://github.com/Gor0d/VisionLOL" target="_blank">GitHub</a> ·
-    <a href="https://github.com/Gor0d/VisionLOL/releases/latest" target="_blank">Download</a> ·
-    <a href="https://github.com/Gor0d/VisionLOL/blob/main/LICENSE" target="_blank">MIT License</a>
-  </p>
+  <div class="footer-inner">
+    <div>
+      <div class="footer-brand">VisionLOL</div>
+      <div style="font-size:.6rem;letter-spacing:.15em;color:var(--nerv-orange-dim);margin-top:.3rem;">
+        PERFORMANCE ANALYSIS SYSTEM
+      </div>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/Gor0d/VisionLOL" target="_blank">GitHub</a>
+      <a href="https://github.com/Gor0d/VisionLOL/releases/latest" target="_blank">Releases</a>
+      <a href="https://github.com/Gor0d/VisionLOL/blob/main/LICENSE" target="_blank">MIT License</a>
+    </div>
+  </div>
   <p class="footer-note">
-    VisionLOL não é endossado pela Riot Games e não reflete as opiniões da Riot Games
-    ou de qualquer pessoa envolvida na produção de League of Legends.
-    League of Legends e Riot Games são marcas registradas da Riot Games, Inc.
+    VisionLOL não é endossado pela Riot Games e não reflete as opiniões da Riot Games ou de qualquer pessoa
+    envolvida na produção de League of Legends. League of Legends e Riot Games são marcas registradas da Riot Games, Inc.
   </p>
 </footer>
 

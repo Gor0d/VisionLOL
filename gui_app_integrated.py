@@ -110,7 +110,7 @@ class VisionLOLAppIntegrated:
         self.success = "#06d6a0"
         self.danger = "#ef476f"
         self.warning = "#ffd60a"
-        self.text = "#ffffff"
+        self.text = "#E0E0D8"
         self.text_dim = "#888888"
 
         # Configurar root
@@ -125,7 +125,7 @@ class VisionLOLAppIntegrated:
                         font=("Arial", 10, "bold"))
         style.map("TNotebook.Tab",
                   background=[("selected", self.accent)],
-                  foreground=[("selected", "#ffffff")])
+                  foreground=[("selected", "#E0E0D8")])
 
     # ===================================================================
     #  WIDGETS PRINCIPAIS
@@ -176,7 +176,7 @@ class VisionLOLAppIntegrated:
         self._create_config_tab()
 
         # Tab 5: Time (paiN Gaming roster)
-        self.tab_team = tk.Frame(self.notebook, bg="#0d1117")
+        self.tab_team = tk.Frame(self.notebook, bg="#000000")
         self.notebook.add(self.tab_team, text="  🎮 Time  ")
         self._create_team_tab()
 

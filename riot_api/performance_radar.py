@@ -15,28 +15,28 @@ import math
 # ═══════════════════════════════════════════════════════════════════════
 #  PALETA  (alinhada com dashboard_viewer / team_viewer)
 # ═══════════════════════════════════════════════════════════════════════
-BG_DARKEST  = "#0d1117"
-BG_DARK     = "#161b22"
-BG_MEDIUM   = "#1c2129"
-BG_LIGHT    = "#21262d"
-BORDER      = "#30363d"
+BG_DARKEST  = "#000000"
+BG_DARK     = "#0A0A08"
+BG_MEDIUM   = "#111110"
+BG_LIGHT    = "#181816"
+BORDER      = "#2A2A28"
 
-ACCENT      = "#58a6ff"
-SUCCESS     = "#3fb950"
-DANGER      = "#f85149"
-WARNING     = "#d29922"
-PURPLE      = "#bc8cff"
+ACCENT      = "#FF9830"
+SUCCESS     = "#50FF50"
+DANGER      = "#FF4840"
+WARNING     = "#FFCC50"
+PURPLE      = "#20F0FF"
 
-TEXT_BRIGHT = "#ffffff"
-TEXT_COLOR  = "#e6edf3"
-TEXT_DIM    = "#7d8590"
+TEXT_BRIGHT = "#E0E0D8"
+TEXT_COLOR  = "#C8C8C0"
+TEXT_DIM    = "#8A8A82"
 
 ROLE_COLORS = {
     "TOP":     "#e5534b",
-    "JUNGLE":  "#3fb950",
-    "MID":     "#58a6ff",
-    "ADC":     "#d29922",
-    "SUPPORT": "#bc8cff",
+    "JUNGLE":  "#50FF50",
+    "MID":     "#FF9830",
+    "ADC":     "#FFCC50",
+    "SUPPORT": "#20F0FF",
 }
 
 # ═══════════════════════════════════════════════════════════════════════

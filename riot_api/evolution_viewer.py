@@ -15,20 +15,20 @@ from .performance_radar import ROLE_BENCHMARKS, ROLE_COLORS
 # ═══════════════════════════════════════════════════════════════════════
 #  PALETA  (alinhada com o restante do projeto)
 # ═══════════════════════════════════════════════════════════════════════
-BG_DARKEST  = "#0d1117"
-BG_DARK     = "#161b22"
-BG_MEDIUM   = "#1c2129"
-BG_LIGHT    = "#21262d"
-BORDER      = "#30363d"
+BG_DARKEST  = "#000000"
+BG_DARK     = "#0A0A08"
+BG_MEDIUM   = "#111110"
+BG_LIGHT    = "#181816"
+BORDER      = "#2A2A28"
 
-ACCENT      = "#58a6ff"
-SUCCESS     = "#3fb950"
-DANGER      = "#f85149"
-WARNING     = "#d29922"
+ACCENT      = "#FF9830"
+SUCCESS     = "#50FF50"
+DANGER      = "#FF4840"
+WARNING     = "#FFCC50"
 
-TEXT_BRIGHT = "#ffffff"
-TEXT_COLOR  = "#e6edf3"
-TEXT_DIM    = "#7d8590"
+TEXT_BRIGHT = "#E0E0D8"
+TEXT_COLOR  = "#C8C8C0"
+TEXT_DIM    = "#8A8A82"
 
 # Cores e rótulos das séries
 SERIES = {

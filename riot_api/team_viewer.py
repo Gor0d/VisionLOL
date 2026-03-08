@@ -14,29 +14,29 @@ from PIL import Image, ImageTk
 # ═══════════════════════════════════════════════════════════════════════
 #  PALETA  (alinhada ao ReplayViewer / DashboardViewer)
 # ═══════════════════════════════════════════════════════════════════════
-BG_DARKEST  = "#0d1117"
-BG_DARK     = "#161b22"
-BG_MEDIUM   = "#1c2129"
-BG_LIGHT    = "#21262d"
-BG_HOVER    = "#2d333b"
-BORDER      = "#30363d"
+BG_DARKEST  = "#000000"
+BG_DARK     = "#0A0A08"
+BG_MEDIUM   = "#111110"
+BG_LIGHT    = "#181816"
+BG_HOVER    = "#1A1A18"
+BORDER      = "#2A2A28"
 
-ACCENT      = "#58a6ff"
-SUCCESS     = "#3fb950"
-DANGER      = "#f85149"
-WARNING     = "#d29922"
-PURPLE      = "#bc8cff"
+ACCENT      = "#FF9830"
+SUCCESS     = "#50FF50"
+DANGER      = "#FF4840"
+WARNING     = "#FFCC50"
+PURPLE      = "#20F0FF"
 
-TEXT_BRIGHT = "#ffffff"
-TEXT_COLOR  = "#e6edf3"
-TEXT_DIM    = "#7d8590"
+TEXT_BRIGHT = "#E0E0D8"
+TEXT_COLOR  = "#C8C8C0"
+TEXT_DIM    = "#8A8A82"
 
 ROLE_COLORS = {
     "TOP":     "#e5534b",
-    "JUNGLE":  "#3fb950",
-    "MID":     "#58a6ff",
-    "ADC":     "#d29922",
-    "SUPPORT": "#bc8cff",
+    "JUNGLE":  "#50FF50",
+    "MID":     "#FF9830",
+    "ADC":     "#FFCC50",
+    "SUPPORT": "#20F0FF",
 }
 
 DEFAULT_TEAM = {
@@ -200,13 +200,15 @@ class TeamViewer(tk.Frame):
         btn_area.pack(side=tk.RIGHT, padx=14, pady=10)
 
         _hbtn(btn_area, "⚙ Time", self._edit_team_config,
-              bg="#2d333b").pack(side=tk.LEFT, padx=(0, 6))
+              bg="#1A1A18").pack(side=tk.LEFT, padx=(0, 6))
         _hbtn(btn_area, "＋ Jogador", self._on_add_player,
               bg="#1a5f3f").pack(side=tk.LEFT, padx=(0, 6))
         _hbtn(btn_area, "↺ Atualizar tudo", self._refresh_all,
               bg="#1a3a5f").pack(side=tk.LEFT, padx=(0, 6))
         _hbtn(btn_area, "🕸 Radar do Time", self._open_team_radar,
               bg="#2a1a5f").pack(side=tk.LEFT, padx=(0, 6))
+        _hbtn(btn_area, "🔁 Comparar", self._open_comparison,
+              bg="#1a3f5f").pack(side=tk.LEFT, padx=(0, 6))
         _hbtn(btn_area, "⚔ Scrims", self._open_scrims,
               bg="#5f1a1a").pack(side=tk.LEFT)
 
@@ -421,6 +423,39 @@ class TeamViewer(tk.Frame):
             return
 
         TeamRadarView(self.root_window, players_data)
+
+    def _open_comparison(self):
+        """Abre janela de comparação lado a lado entre dois jogadores."""
+        from riot_api.performance_radar import compute_player_metrics, normalize_metrics
+        from riot_api.player_comparison import PlayerComparisonView
+
+        players_data = []
+        for card in self._player_cards:
+            if not card.stats.get("summaries"):
+                continue
+            puuid     = card.stats.get("puuid")
+            summaries = card.stats["summaries"]
+            cache     = {mid: self.match_api.get_match_data(mid)
+                         for mid, _, _ in summaries}
+            role      = card.player.get("role", "MID")
+            raw       = compute_player_metrics(summaries, cache, puuid)
+            norm      = normalize_metrics(raw, role)
+            players_data.append({
+                "player":  card.player,
+                "raw":     raw,
+                "norm":    norm,
+                "n_games": len(summaries),
+            })
+
+        if len(players_data) < 2:
+            messagebox.showinfo(
+                "Aguarde",
+                "Aguarde o carregamento de pelo menos 2 jogadores.",
+                parent=self.root_window
+            )
+            return
+
+        PlayerComparisonView(self.root_window, players_data)
 
     def _open_scrims(self):
         """Abre o dashboard de scrims."""

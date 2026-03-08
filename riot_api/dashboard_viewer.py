@@ -7,6 +7,7 @@ Clique em qualquer partida na lista para filtrar o heatmap para aquela partida.
 import logging
 import tkinter as tk
 import threading
+import time as _time
 from PIL import Image, ImageTk, ImageFilter
 
 logger = logging.getLogger(__name__)
@@ -20,20 +21,20 @@ except ImportError:
 # ═══════════════════════════════════════════════════════════════════════
 #  PALETA
 # ═══════════════════════════════════════════════════════════════════════
-BG_DARKEST  = "#0d1117"
-BG_DARK     = "#161b22"
-BG_MEDIUM   = "#1c2129"
-BG_LIGHT    = "#21262d"
-BORDER      = "#30363d"
+BG_DARKEST  = "#000000"
+BG_DARK     = "#0A0A08"
+BG_MEDIUM   = "#111110"
+BG_LIGHT    = "#181816"
+BORDER      = "#2A2A28"
 
-ACCENT      = "#58a6ff"
-SUCCESS     = "#3fb950"
-DANGER      = "#f85149"
-WARNING     = "#d29922"
+ACCENT      = "#FF9830"
+SUCCESS     = "#50FF50"
+DANGER      = "#FF4840"
+WARNING     = "#FFCC50"
 
-TEXT_BRIGHT = "#ffffff"
-TEXT_COLOR  = "#e6edf3"
-TEXT_DIM    = "#7d8590"
+TEXT_BRIGHT = "#E0E0D8"
+TEXT_COLOR  = "#C8C8C0"
+TEXT_DIM    = "#8A8A82"
 
 ROW_WIN     = "#0f2a14"
 ROW_LOSS    = "#2a0f0f"
@@ -94,7 +95,7 @@ class DashboardViewer:
         self.win = tk.Toplevel(self.root)
         self.win.title("VisionLOL — Dashboard")
         self.win.configure(bg=BG_DARKEST)
-        self.win.geometry("960x660")
+        self.win.geometry("980x740")
         self.win.resizable(True, True)
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -209,6 +210,48 @@ class DashboardViewer:
             tk.Label(leg, text=f" {label}  ", font=("Segoe UI", 8),
                      bg=BG_DARKEST, fg=TEXT_DIM).pack(side=tk.LEFT)
 
+        # ── Detalhe da partida selecionada ────────────────────────────
+        tk.Frame(parent, bg=BORDER, height=1).pack(fill=tk.X, pady=(6, 0))
+
+        self._detail_hint = tk.Label(
+            parent,
+            text="↑ Clique em uma partida para ver os detalhes",
+            font=("Segoe UI", 8), bg=BG_DARKEST, fg=TEXT_DIM
+        )
+        self._detail_hint.pack(anchor="w", padx=6, pady=(3, 0))
+
+        detail_outer = tk.Frame(parent, bg=BG_DARKEST)
+        detail_outer.pack(fill=tk.BOTH, expand=True, padx=0, pady=(2, 0))
+
+        from tkinter import ttk as _ttk
+        detail_sb = _ttk.Scrollbar(detail_outer, orient="vertical")
+        detail_sb.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self._detail_canvas = tk.Canvas(detail_outer, bg=BG_DARKEST,
+                                        highlightthickness=0,
+                                        yscrollcommand=detail_sb.set)
+        self._detail_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        detail_sb.config(command=self._detail_canvas.yview)
+
+        self._detail_frame = tk.Frame(self._detail_canvas, bg=BG_DARKEST)
+        self._detail_win_id = self._detail_canvas.create_window(
+            (0, 0), window=self._detail_frame, anchor="nw"
+        )
+        self._detail_frame.bind(
+            "<Configure>",
+            lambda e: self._detail_canvas.configure(
+                scrollregion=self._detail_canvas.bbox("all"))
+        )
+        self._detail_canvas.bind(
+            "<Configure>",
+            lambda e: self._detail_canvas.itemconfig(
+                self._detail_win_id, width=e.width)
+        )
+        self._detail_canvas.bind(
+            "<MouseWheel>",
+            lambda e: self._detail_canvas.yview_scroll(-1 * (e.delta // 120), "units")
+        )
+
     # ─────────────────────────────────────────────────────────────────
     #  ASSETS
     # ─────────────────────────────────────────────────────────────────
@@ -239,6 +282,7 @@ class DashboardViewer:
             dur  = s.get("duration", "?")
             pos  = s.get("position", "?")
             mode = s.get("mode", "CLASSIC")
+            ago  = _time_ago(s.get("timestamp", 0))
 
             row_bg = ROW_WIN if win else ROW_LOSS
 
@@ -288,6 +332,11 @@ class DashboardViewer:
             mode_short = {"CLASSIC": "SR", "ARAM": "ARAM", "URF": "URF"}.get(mode, mode[:4])
             tk.Label(row, text=mode_short, font=("Segoe UI", 8),
                      bg=row_bg, fg=TEXT_DIM, width=4).pack(side=tk.LEFT)
+
+            # Tempo relativo
+            if ago:
+                tk.Label(row, text=ago, font=("Segoe UI", 7),
+                         bg=row_bg, fg=TEXT_DIM).pack(side=tk.LEFT, padx=(4, 2))
 
             # Indicador de status de loading (● = pronto, ○ = aguardando)
             status_lbl = tk.Label(row, text="○", font=("Segoe UI", 9),
@@ -345,8 +394,156 @@ class DashboardViewer:
                 fg=WARNING
             )
 
+        # Atualiza detalhes da partida
+        self._update_match_detail(new_sel)
+
         # Exibe heatmap da partida selecionada (se disponível)
         self._refresh_heatmap()
+
+    # ─────────────────────────────────────────────────────────────────
+    #  DETALHE DA PARTIDA SELECIONADA
+    # ─────────────────────────────────────────────────────────────────
+
+    def _update_match_detail(self, match_id: str | None):
+        """Limpa e reconstrói o painel de detalhe para a partida selecionada."""
+        for w in self._detail_frame.winfo_children():
+            w.destroy()
+
+        if match_id is None:
+            self._detail_hint.config(
+                text="↑ Clique em uma partida para ver os detalhes",
+                fg=TEXT_DIM
+            )
+            return
+
+        md = self.cache.get(match_id)
+        if not md:
+            self._detail_hint.config(text="Dados da partida não disponíveis", fg=TEXT_DIM)
+            return
+
+        self._detail_hint.config(text="DETALHES DA PARTIDA", fg=ACCENT)
+        self._build_match_detail(self._detail_frame, md)
+
+    def _build_match_detail(self, parent: tk.Frame, md: dict):
+        """Popula o frame com matchup 5v5 e build do jogador rastreado."""
+        info         = md.get("info", {})
+        participants = info.get("participants", [])
+        teams        = {t["teamId"]: t for t in info.get("teams", [])}
+
+        blue  = [p for p in participants if p.get("teamId") == 100]
+        red   = [p for p in participants if p.get("teamId") == 200]
+
+        blue_win = teams.get(100, {}).get("win", False)
+        red_win  = teams.get(200, {}).get("win", False)
+
+        pos_map = {"TOP": "TOP", "JUNGLE": "JGL", "MIDDLE": "MID",
+                   "BOTTOM": "ADC", "UTILITY": "SUP"}
+
+        def _team_section(title: str, players: list, win: bool):
+            color  = SUCCESS if win else DANGER
+            result = "VITÓRIA" if win else "DERROTA"
+
+            hdr = tk.Frame(parent, bg=BG_DARK)
+            hdr.pack(fill=tk.X, padx=2, pady=(4, 1))
+            tk.Label(hdr, text=f" {title} ", font=("Segoe UI", 8, "bold"),
+                     bg=color, fg=BG_DARKEST).pack(side=tk.LEFT, padx=4, pady=2)
+            tk.Label(hdr, text=result, font=("Segoe UI", 7, "bold"),
+                     bg=BG_DARK, fg=color).pack(side=tk.LEFT, padx=4)
+
+            for p in players:
+                is_me = p.get("puuid") == self.puuid
+                k     = p.get("kills",   0)
+                d     = p.get("deaths",  0)
+                a     = p.get("assists", 0)
+                champ = p.get("championName", "?")
+                pos   = pos_map.get(p.get("teamPosition", ""), p.get("teamPosition", "?")[:3])
+                bg    = BG_MEDIUM if is_me else BG_DARKEST
+
+                row = tk.Frame(parent, bg=bg)
+                row.pack(fill=tk.X, padx=2, pady=0)
+
+                # Role badge
+                tk.Label(row, text=f"{pos:>3}", font=("Segoe UI", 7),
+                         bg=bg, fg=ACCENT if is_me else TEXT_DIM,
+                         width=4).pack(side=tk.LEFT, padx=(4, 2))
+
+                # Campeão
+                champ_fg = TEXT_BRIGHT if is_me else TEXT_COLOR
+                champ_font = ("Segoe UI", 8, "bold") if is_me else ("Segoe UI", 8)
+                tk.Label(row, text=champ, font=champ_font,
+                         bg=bg, fg=champ_fg, width=13, anchor="w"
+                         ).pack(side=tk.LEFT)
+
+                # KDA
+                kda_str = f"{k}/{d}/{a}"
+                kda_fg  = SUCCESS if d == 0 else (WARNING if (k+a)/max(d,1) >= 3 else TEXT_DIM)
+                tk.Label(row, text=kda_str, font=("Segoe UI", 8),
+                         bg=bg, fg=kda_fg).pack(side=tk.LEFT, padx=(2, 4))
+
+                # Build do jogador rastreado
+                if is_me:
+                    items = [p.get(f"item{i}", 0) for i in range(6)]
+                    items = [i for i in items if i]
+                    if items:
+                        self._build_item_row(parent, items, p.get("item6", 0))
+
+        _team_section("TIME AZUL", blue, blue_win)
+        _team_section("TIME VERMELHO", red, red_win)
+
+    def _build_item_row(self, parent: tk.Frame, items: list, trinket: int):
+        """Linha com os ícones dos itens do jogador rastreado (carregados em background)."""
+        SLOT_SZ = 28
+
+        row = tk.Frame(parent, bg=BG_LIGHT)
+        row.pack(fill=tk.X, padx=2, pady=(0, 4))
+
+        tk.Label(row, text="Build:", font=("Segoe UI", 7),
+                 bg=BG_LIGHT, fg=TEXT_DIM).pack(side=tk.LEFT, padx=(6, 4), pady=3)
+
+        all_ids = items + ([trinket] if trinket else [])
+        slots   = []
+
+        for item_id in all_ids:
+            box = tk.Frame(row, bg=BG_MEDIUM, width=SLOT_SZ, height=SLOT_SZ,
+                           highlightthickness=1, highlightbackground=BORDER)
+            box.pack(side=tk.LEFT, padx=1, pady=3)
+            box.pack_propagate(False)
+            # Placeholder com ID truncado
+            ph = tk.Label(box, text=str(item_id)[-3:], font=("Segoe UI", 5),
+                          bg=BG_MEDIUM, fg=TEXT_DIM)
+            ph.place(relx=0.5, rely=0.5, anchor="center")
+            slots.append((box, ph, item_id))
+
+        if not self.map_viz:
+            return
+
+        # Carrega ícones em background
+        item_icon_refs = []  # evita GC
+
+        def _load(slot_box, slot_ph, item_id):
+            if self._closed:
+                return
+            img = self.map_viz._download_item_icon(item_id)
+            if img is None or self._closed:
+                return
+            small = img.resize((SLOT_SZ, SLOT_SZ), Image.LANCZOS)
+            photo = ImageTk.PhotoImage(small)
+
+            def _place():
+                if self._closed:
+                    return
+                try:
+                    slot_ph.destroy()
+                    lbl = tk.Label(slot_box, image=photo, bg=BG_MEDIUM)
+                    lbl.place(relx=0, rely=0, relwidth=1, relheight=1)
+                    item_icon_refs.append(photo)
+                    lbl.image = photo
+                except tk.TclError:
+                    pass
+            self.root.after(0, _place)
+
+        for box, ph, item_id in slots:
+            threading.Thread(target=_load, args=(box, ph, item_id), daemon=True).start()
 
     # ─────────────────────────────────────────────────────────────────
     #  TOP CAMPEÕES
@@ -587,6 +784,34 @@ class DashboardViewer:
 # ═══════════════════════════════════════════════════════════════════════
 #  FUNÇÕES AUXILIARES
 # ═══════════════════════════════════════════════════════════════════════
+
+def _time_ago(timestamp_ms: int) -> str:
+    """Converte timestamp Unix (ms) em string relativa: '13 hrs atrás', '2 dias atrás'."""
+    if not timestamp_ms:
+        return ""
+    now_s   = _time.time()
+    diff_s  = now_s - timestamp_ms / 1000.0
+    if diff_s < 0:
+        return ""
+    if diff_s < 60:
+        return "agora"
+    if diff_s < 3600:
+        m = int(diff_s / 60)
+        return f"{m} min atrás"
+    if diff_s < 86400:
+        h = int(diff_s / 3600)
+        return f"{h} hr{'s' if h > 1 else ''} atrás"
+    d = int(diff_s / 86400)
+    if d == 1:
+        return "1 dia atrás"
+    if d < 30:
+        return f"{d} dias atrás"
+    if d < 365:
+        m = int(d / 30)
+        return f"{m} {'mês' if m == 1 else 'meses'} atrás"
+    y = int(d / 365)
+    return f"{y} ano{'s' if y > 1 else ''} atrás"
+
 
 def _section_label(parent, text: str):
     tk.Label(parent, text=text, font=("Segoe UI", 9, "bold"),

@@ -14,20 +14,20 @@ from PIL import Image, ImageTk
 # ═══════════════════════════════════════════════════════════════════════
 #  PALETA
 # ═══════════════════════════════════════════════════════════════════════
-BG_DARKEST  = "#0d1117"
-BG_DARK     = "#161b22"
-BG_MEDIUM   = "#1c2129"
-BG_LIGHT    = "#21262d"
-BORDER      = "#30363d"
+BG_DARKEST  = "#000000"
+BG_DARK     = "#0A0A08"
+BG_MEDIUM   = "#111110"
+BG_LIGHT    = "#181816"
+BORDER      = "#2A2A28"
 
-ACCENT      = "#58a6ff"
-SUCCESS     = "#3fb950"
-DANGER      = "#f85149"
-WARNING     = "#d29922"
+ACCENT      = "#FF9830"
+SUCCESS     = "#50FF50"
+DANGER      = "#FF4840"
+WARNING     = "#FFCC50"
 
-TEXT_BRIGHT = "#ffffff"
-TEXT_COLOR  = "#e6edf3"
-TEXT_DIM    = "#7d8590"
+TEXT_BRIGHT = "#E0E0D8"
+TEXT_COLOR  = "#C8C8C0"
+TEXT_DIM    = "#8A8A82"
 
 ICON_SIZE   = 28
 MATCH_COUNT = 30   # partidas a buscar para o pool
@@ -72,7 +72,9 @@ class ChampionPoolViewer(tk.Toplevel):
 
         self._icon_refs: list = []    # evita GC dos PhotoImage
         self._rows_data: list = []    # dados brutos para copiar
+        self._closed    = False
 
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._build_ui()
         threading.Thread(target=self._fetch, daemon=True).start()
 
@@ -331,10 +333,16 @@ class ChampionPoolViewer(tk.Toplevel):
 
         return frame
 
+    def _on_close(self):
+        self._closed = True
+        self.destroy()
+
     def _load_icon(self, champion_name: str, row_index: int):
+        if self._closed:
+            return
         try:
             img = self.map_viz._download_champion_icon(champion_name)
-            if img is None:
+            if img is None or self._closed:
                 return
             img_small = img.resize((ICON_SIZE, ICON_SIZE), Image.LANCZOS)
             photo = ImageTk.PhotoImage(img_small)
@@ -344,7 +352,7 @@ class ChampionPoolViewer(tk.Toplevel):
             if row_index < len(children):
                 frame = children[row_index]
                 icon_lbl = getattr(frame, "icon_lbl", None)
-                if icon_lbl and icon_lbl.winfo_exists():
+                if icon_lbl and icon_lbl.winfo_exists() and not self._closed:
                     self.after(0, self._set_icon, icon_lbl, photo)
         except Exception:
             pass

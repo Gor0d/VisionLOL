@@ -1,0 +1,19 @@
+{
+    "riot_api_key": "RGAPI-138e2bbe-02f4-45f6-baa2-ae3203d4dc3c",
+    "game_name": "雪域之王",
+    "tag_line": "gorod",
+    "region": "br1",
+    "routing": "americas",
+    "proximity": {
+        "poll_interval": 0.5,
+        "gank_distance": 2000,
+        "gank_duration": 5.0
+    },
+    "auto_start_riot_tracking": true,
+    "scrim_server": {
+        "enabled": false,
+        "port": 7654,
+        "token": "f4c07857-141a-45a7-80d3-359ede899fdf"
+    },
+    "discord_webhook": "https://discord.com/api/webhooks/1478531287584215191/3JrwxFnLdzN2-bryacH7i6mYb6L2dQt_J8IoX3OBH7L061u3wESZMKrzL0snDzDmnGYg"
+}

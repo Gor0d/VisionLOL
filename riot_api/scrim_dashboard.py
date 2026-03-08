@@ -40,22 +40,22 @@ from .performance_radar import (
 # ═══════════════════════════════════════════════════════════════════════
 #  PALETA
 # ═══════════════════════════════════════════════════════════════════════
-BG_DARKEST  = "#0d1117"
-BG_DARK     = "#161b22"
-BG_MEDIUM   = "#1c2129"
-BG_LIGHT    = "#21262d"
-BG_HOVER    = "#2d333b"
-BORDER      = "#30363d"
+BG_DARKEST  = "#000000"
+BG_DARK     = "#0A0A08"
+BG_MEDIUM   = "#111110"
+BG_LIGHT    = "#181816"
+BG_HOVER    = "#1A1A18"
+BORDER      = "#2A2A28"
 
-ACCENT      = "#58a6ff"
-SUCCESS     = "#3fb950"
-DANGER      = "#f85149"
-WARNING     = "#d29922"
-PURPLE      = "#bc8cff"
+ACCENT      = "#FF9830"
+SUCCESS     = "#50FF50"
+DANGER      = "#FF4840"
+WARNING     = "#FFCC50"
+PURPLE      = "#20F0FF"
 
-TEXT_BRIGHT = "#ffffff"
-TEXT_COLOR  = "#e6edf3"
-TEXT_DIM    = "#7d8590"
+TEXT_BRIGHT = "#E0E0D8"
+TEXT_COLOR  = "#C8C8C0"
+TEXT_DIM    = "#8A8A82"
 
 ROW_WIN     = "#0f2a14"
 ROW_LOSS    = "#2a0f0f"
@@ -621,7 +621,7 @@ class ScrimDashboard(tk.Toplevel):
 
         tk.Button(sh, text="📤 Discord",
                   font=("Segoe UI", 9, "bold"),
-                  bg="#5865F2", fg="#ffffff",
+                  bg="#5865F2", fg="#E0E0D8",
                   relief=tk.FLAT, cursor="hand2",
                   padx=10, pady=4,
                   command=lambda s=sess: self._post_to_discord(s)
@@ -1191,7 +1191,7 @@ class _WebhookConfigDialog(tk.Toplevel):
     def __init__(self, parent, on_save=None):
         super().__init__(parent)
         self.title("Configurar Discord Webhook")
-        self.configure(bg="#0d1117")
+        self.configure(bg="#000000")
         self.resizable(False, False)
         self.grab_set()
 
@@ -1199,11 +1199,11 @@ class _WebhookConfigDialog(tk.Toplevel):
 
         tk.Label(self, text="URL do Webhook do Discord",
                  font=("Segoe UI", 10, "bold"),
-                 bg="#0d1117", fg="#e6edf3").pack(padx=20, pady=(16, 4), anchor="w")
+                 bg="#000000", fg="#C8C8C0").pack(padx=20, pady=(16, 4), anchor="w")
 
         tk.Label(self,
                  text="No Discord: Canal → Editar → Integrações → Webhooks → Copiar URL",
-                 font=("Segoe UI", 8), bg="#0d1117", fg="#7d8590"
+                 font=("Segoe UI", 8), bg="#000000", fg="#8A8A82"
                  ).pack(padx=20, pady=(0, 6), anchor="w")
 
         self._url_var = tk.StringVar()
@@ -1213,29 +1213,29 @@ class _WebhookConfigDialog(tk.Toplevel):
 
         entry = tk.Entry(self, textvariable=self._url_var,
                          font=("Segoe UI", 9),
-                         bg="#21262d", fg="#e6edf3",
-                         insertbackground="#e6edf3",
+                         bg="#181816", fg="#C8C8C0",
+                         insertbackground="#C8C8C0",
                          relief=tk.FLAT, bd=4, width=52)
         entry.pack(padx=20, pady=(0, 10))
 
-        btn_row = tk.Frame(self, bg="#0d1117")
+        btn_row = tk.Frame(self, bg="#000000")
         btn_row.pack(padx=20, pady=(0, 16), fill=tk.X)
 
         tk.Button(btn_row, text="Salvar e Postar",
                   font=("Segoe UI", 9, "bold"),
-                  bg="#5865F2", fg="#ffffff",
+                  bg="#5865F2", fg="#E0E0D8",
                   relief=tk.FLAT, cursor="hand2", padx=14, pady=6,
                   command=self._save).pack(side=tk.LEFT, padx=(0, 6))
 
         tk.Button(btn_row, text="Testar",
                   font=("Segoe UI", 9),
-                  bg="#21262d", fg="#58a6ff",
+                  bg="#181816", fg="#FF9830",
                   relief=tk.FLAT, cursor="hand2", padx=14, pady=6,
                   command=self._test).pack(side=tk.LEFT)
 
         tk.Button(btn_row, text="Cancelar",
                   font=("Segoe UI", 9),
-                  bg="#21262d", fg="#7d8590",
+                  bg="#181816", fg="#8A8A82",
                   relief=tk.FLAT, cursor="hand2", padx=14, pady=6,
                   command=self.destroy).pack(side=tk.RIGHT)
 

@@ -206,6 +206,7 @@ class MatchAPI:
             "mode": mode,
             "duration": f"{minutes}min",
             "duration_seconds": duration,
+            "timestamp": info.get("gameStartTimestamp", 0),  # ms epoch
         }
 
         if puuid:
