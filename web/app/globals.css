@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+:root {
+  --bg:        #000000;
+  --bg-dark:   #080808;
+  --bg-medium: #101010;
+  --bg-light:  #181818;
+  --border:    #222222;
+  --accent:    #FF9830;
+  --green:     #50FF50;
+  --cyan:      #20F0FF;
+  --danger:    #FF4040;
+  --text:      #E0E0E0;
+  --text-dim:  #606060;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 13px;
+  min-height: 100vh;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-dark); }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+/* Scanline overlay */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px);
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.badge { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 11px; font-weight: 700; }
+.badge-win  { background: #0a2f0a; color: var(--green);  border: 1px solid #1a5f1a; }
+.badge-loss { background: #2f0a0a; color: var(--danger); border: 1px solid #5f1a1a; }
+
+.kda-good { color: var(--green); }
+.kda-ok   { color: var(--accent); }
+.kda-bad  { color: var(--danger); }
+
+.role-badge { display: inline-block; width: 26px; text-align: center; font-size: 10px; font-weight: 700; padding: 1px 0; border-radius: 2px; }
+.role-TOP     { background: #1a0a2f; color: #b070ff; border: 1px solid #4a1a7f; }
+.role-JUNGLE  { background: #0a2f0a; color: var(--green); border: 1px solid #1a5f1a; }
+.role-MIDDLE  { background: #1a1a00; color: #dddd00; border: 1px solid #5a5a00; }
+.role-BOTTOM  { background: #001a2f; color: var(--cyan);  border: 1px solid #004a6f; }
+.role-SUPPORT { background: #2f0a1a; color: #ff70a0; border: 1px solid #7f1a40; }
+
+.nerv-card { background: var(--bg-medium); border: 1px solid var(--border); border-radius: 4px; padding: 16px; }
+.nerv-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.nerv-table th { padding: 6px 10px; text-align: left; color: var(--text-dim); font-weight: 500; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.nerv-table td { padding: 7px 10px; border-bottom: 1px solid #111; vertical-align: middle; }
+.nerv-table tr:hover td { background: #0c0c0c; }
+
+.nerv-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border: 1px solid var(--border); border-radius: 3px; background: var(--bg-light); color: var(--text); font-family: inherit; font-size: 12px; cursor: pointer; transition: border-color 0.15s, color 0.15s; }
+.nerv-btn:hover { border-color: var(--accent); color: var(--accent); }
+.nerv-btn.primary { border-color: var(--accent); color: var(--accent); }
+
+.player-card { background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 4px; padding: 14px 16px; cursor: pointer; transition: border-color 0.15s, background 0.15s; display: block; text-decoration: none; color: inherit; }
+.player-card:hover { border-color: #333; background: #0e0e0e; }

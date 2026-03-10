@@ -6,6 +6,7 @@ Clique em qualquer partida na lista para filtrar o heatmap para aquela partida.
 
 import logging
 import tkinter as tk
+from tkinter import messagebox
 import threading
 import time as _time
 from PIL import Image, ImageTk, ImageFilter
@@ -422,7 +423,31 @@ class DashboardViewer:
             return
 
         self._detail_hint.config(text="DETALHES DA PARTIDA", fg=ACCENT)
+
+        # Botão para abrir Gold/XP Diff
+        btn_bar = tk.Frame(self._detail_frame, bg=BG_DARKEST)
+        btn_bar.pack(fill=tk.X, pady=(2, 4))
+        tk.Button(btn_bar, text="📈 Gold/XP Diff",
+                  font=("Segoe UI", 8), bg=BG_LIGHT, fg=ACCENT,
+                  relief=tk.FLAT, cursor="hand2", padx=8, pady=2,
+                  command=lambda mid=match_id, m=md: self._open_gold_diff(mid, m)
+                  ).pack(side=tk.LEFT, padx=6)
+
         self._build_match_detail(self._detail_frame, md)
+
+    def _open_gold_diff(self, match_id: str, md: dict):
+        """Abre a janela de Gold/XP Diff para a partida selecionada."""
+        timeline = self.match_api.get_match_timeline(match_id)
+        if not timeline:
+            tk.messagebox.showwarning(
+                "Timeline indisponível",
+                "A timeline desta partida ainda não foi carregada.\n"
+                "Aguarde o heatmap terminar de carregar e tente novamente.",
+                parent=self.win
+            )
+            return
+        from riot_api.gold_diff_viewer import GoldDiffViewer
+        GoldDiffViewer(self.win, md, timeline, self.puuid)
 
     def _build_match_detail(self, parent: tk.Frame, md: dict):
         """Popula o frame com matchup 5v5 e build do jogador rastreado."""

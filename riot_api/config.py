@@ -63,7 +63,9 @@ DEFAULT_CONFIG = {
         "port": 7654,
         "token": ""   # gerado automaticamente ao ativar pela primeira vez
     },
-    "discord_webhook": ""
+    "discord_webhook": "",
+    "web_dashboard_url": "",
+    "web_api_token": ""
 }
 
 

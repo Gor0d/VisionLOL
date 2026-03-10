@@ -619,6 +619,14 @@ class ScrimDashboard(tk.Toplevel):
                  font=("Segoe UI", 10), bg=BG_DARK, fg=ACCENT
                  ).pack(side=tk.RIGHT, padx=14)
 
+        tk.Button(sh, text="🌐 Publicar",
+                  font=("Segoe UI", 9, "bold"),
+                  bg="#FF9830", fg="#000000",
+                  relief=tk.FLAT, cursor="hand2",
+                  padx=10, pady=4,
+                  command=lambda s=sess: self._publish_to_web(s)
+                  ).pack(side=tk.RIGHT, padx=(0, 4))
+
         tk.Button(sh, text="📤 Discord",
                   font=("Segoe UI", 9, "bold"),
                   bg="#5865F2", fg="#E0E0D8",
@@ -1050,6 +1058,132 @@ class ScrimDashboard(tk.Toplevel):
     #  DISCORD WEBHOOK
     # ─────────────────────────────────────────────────────────────────
 
+    def _publish_to_web(self, sess: dict):
+        """Publica a sessão no dashboard web (Next.js/Veloz)."""
+        cfg        = load_config()
+        base_url   = cfg.get("web_dashboard_url", "").strip()
+        api_token  = cfg.get("web_api_token", "").strip()
+
+        if not base_url or not api_token:
+            _WebPublishConfigDialog(self, on_save=lambda u, t: self._do_publish(sess, u, t))
+            return
+
+        self._do_publish(sess, base_url, api_token)
+
+    def _do_publish(self, sess: dict, base_url: str, api_token: str):
+        """Agrega stats e envia para /api/publish em thread de background."""
+        def _run():
+            try:
+                from .web_publisher import WebPublisher
+                pub = WebPublisher(base_url, api_token)
+
+                # ── Verifica conectividade ────────────────────────────────────
+                ok, msg = pub.health_check()
+                if not ok:
+                    self.after(0, messagebox.showerror, "Dashboard Web",
+                               f"Não foi possível conectar ao dashboard:\n{msg}")
+                    return
+
+                # ── Agrega stats dos jogadores ────────────────────────────────
+                match_ids   = sess.get("match_ids", [])
+                our_puuids  = set(self._puuids.values())
+                wins = losses = 0
+
+                for mid in match_ids:
+                    md = self._match_cache.get(mid)
+                    if not md:
+                        continue
+                    for p in md.get("info", {}).get("participants", []):
+                        if p.get("puuid") in our_puuids:
+                            if p.get("win"):
+                                wins += 1
+                            else:
+                                losses += 1
+                            break
+
+                players_payload = []
+                for player in self.roster:
+                    key   = f"{player['game_name']}#{player['tag_line']}"
+                    puuid = self._puuids.get(key)
+                    if not puuid:
+                        continue
+
+                    kills = deaths = assists = cs = vision = p_wins = p_games = 0
+                    champ_counts: dict = {}
+
+                    for mid in match_ids:
+                        md = self._match_cache.get(mid)
+                        if not md:
+                            continue
+                        for p in md.get("info", {}).get("participants", []):
+                            if p.get("puuid") != puuid:
+                                continue
+                            dur = md.get("info", {}).get("gameDuration", 1)
+                            kills   += p.get("kills", 0)
+                            deaths  += p.get("deaths", 0)
+                            assists += p.get("assists", 0)
+                            cs      += p.get("totalMinionsKilled", 0) + p.get("neutralMinionsKilled", 0)
+                            vision  += p.get("visionScore", 0)
+                            if p.get("win"):
+                                p_wins += 1
+                            p_games += 1
+                            champ = p.get("championName", "")
+                            if champ:
+                                champ_counts[champ] = champ_counts.get(champ, 0) + 1
+                            break
+
+                    if p_games == 0:
+                        continue
+
+                    avg_dur   = sum(
+                        self._match_cache.get(m, {}).get("info", {}).get("gameDuration", 0)
+                        for m in match_ids
+                        if self._match_cache.get(m)
+                    ) / max(p_games, 1)
+                    minutes   = max(avg_dur / 60, 1)
+                    kda_ratio = (kills + assists) / max(deaths, 1)
+                    top_champ = max(champ_counts, key=champ_counts.get) if champ_counts else ""
+
+                    players_payload.append({
+                        "game_name":  player["game_name"],
+                        "tag_line":   player["tag_line"],
+                        "role":       player.get("role", ""),
+                        "display":    player.get("display", player["game_name"]),
+                        "games":      p_games,
+                        "wins":       p_wins,
+                        "kills":      kills,
+                        "deaths":     deaths,
+                        "assists":    assists,
+                        "cs":         cs,
+                        "vision":     vision,
+                        "top_champ":  top_champ,
+                        "kda_ratio":  round(kda_ratio, 3),
+                        "cs_per_min": round(cs / minutes, 2),
+                        "vision_pm":  round(vision / minutes, 2),
+                    })
+
+                session_payload = {
+                    "id":       sess.get("id", f"scrim_{sess.get('date','')[:10]}"),
+                    "date":     sess.get("date", "")[:10],
+                    "opponent": sess.get("opponent", ""),
+                    "notes":    sess.get("notes", ""),
+                    "wins":     wins,
+                    "losses":   losses,
+                    "metadata": {"match_ids": match_ids},
+                }
+
+                ok, msg = pub.publish_session(session_payload, players_payload)
+                if ok:
+                    self.after(0, messagebox.showinfo, "Dashboard Web",
+                               f"✓ {msg}\n\nVisualizar em: {base_url}/scrims")
+                else:
+                    self.after(0, messagebox.showerror, "Dashboard Web", f"Erro: {msg}")
+
+            except Exception as e:
+                self.after(0, messagebox.showerror, "Dashboard Web", str(e))
+
+        threading.Thread(target=_run, daemon=True).start()
+
     def _post_to_discord(self, sess: dict):
         """Abre o diálogo de configuração do webhook se necessário, depois posta."""
         cfg = load_config()
@@ -1273,6 +1407,103 @@ class _WebhookConfigDialog(tk.Toplevel):
                 else:
                     self.after(0, messagebox.showwarning,
                                "Teste", f"Discord respondeu {resp.status_code}.")
+            except Exception as e:
+                self.after(0, messagebox.showerror, "Erro", str(e))
+
+        threading.Thread(target=_run, daemon=True).start()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  WEB PUBLISH CONFIG DIALOG
+# ═══════════════════════════════════════════════════════════════════════
+
+class _WebPublishConfigDialog(tk.Toplevel):
+    """Diálogo para configurar a URL do dashboard web e o API token."""
+
+    def __init__(self, parent, on_save=None):
+        super().__init__(parent)
+        self.title("Configurar Dashboard Web")
+        self.configure(bg="#000000")
+        self.resizable(False, False)
+        self.grab_set()
+
+        self._on_save = on_save
+        cfg = load_config()
+
+        def _lbl(text, sub=False):
+            tk.Label(self, text=text,
+                     font=("Segoe UI", 8 if sub else 10, "normal" if sub else "bold"),
+                     bg="#000000", fg="#8A8A82" if sub else "#C8C8C0"
+                     ).pack(padx=20, pady=(14 if not sub else 0, 2), anchor="w")
+
+        _lbl("URL do Dashboard Web (Veloz)")
+        _lbl("Ex: https://visionlol.veloz.app", sub=True)
+        self._url_var = tk.StringVar(value=cfg.get("web_dashboard_url", ""))
+        tk.Entry(self, textvariable=self._url_var,
+                 font=("Segoe UI", 9), bg="#181816", fg="#C8C8C0",
+                 insertbackground="#C8C8C0", relief=tk.FLAT, bd=4, width=52
+                 ).pack(padx=20, pady=(0, 4))
+
+        _lbl("API Token")
+        _lbl("Mesmo valor de API_TOKEN no .env.local do Next.js", sub=True)
+        self._token_var = tk.StringVar(value=cfg.get("web_api_token", ""))
+        tk.Entry(self, textvariable=self._token_var,
+                 font=("Segoe UI", 9), bg="#181816", fg="#C8C8C0",
+                 insertbackground="#C8C8C0", relief=tk.FLAT, bd=4, width=52,
+                 show="*"
+                 ).pack(padx=20, pady=(0, 4))
+
+        btn_row = tk.Frame(self, bg="#000000")
+        btn_row.pack(padx=20, pady=(8, 16), fill=tk.X)
+
+        tk.Button(btn_row, text="Salvar e Publicar",
+                  font=("Segoe UI", 9, "bold"),
+                  bg="#FF9830", fg="#000000",
+                  relief=tk.FLAT, cursor="hand2", padx=14, pady=6,
+                  command=self._save).pack(side=tk.LEFT, padx=(0, 6))
+
+        tk.Button(btn_row, text="Testar Conexão",
+                  font=("Segoe UI", 9),
+                  bg="#181816", fg="#20F0FF",
+                  relief=tk.FLAT, cursor="hand2", padx=14, pady=6,
+                  command=self._test).pack(side=tk.LEFT)
+
+        tk.Button(btn_row, text="Cancelar",
+                  font=("Segoe UI", 9),
+                  bg="#181816", fg="#8A8A82",
+                  relief=tk.FLAT, cursor="hand2", padx=14, pady=6,
+                  command=self.destroy).pack(side=tk.RIGHT)
+
+    def _save(self):
+        url   = self._url_var.get().strip()
+        token = self._token_var.get().strip()
+        if not url or not token:
+            messagebox.showwarning("Aviso", "URL e Token são obrigatórios.", parent=self)
+            return
+        cfg = load_config()
+        cfg["web_dashboard_url"] = url
+        cfg["web_api_token"]     = token
+        save_config(cfg)
+        self.destroy()
+        if self._on_save:
+            self._on_save(url, token)
+
+    def _test(self):
+        url = self._url_var.get().strip()
+        if not url:
+            messagebox.showwarning("Aviso", "Informe a URL primeiro.", parent=self)
+            return
+
+        def _run():
+            try:
+                from .web_publisher import WebPublisher
+                token = self._token_var.get().strip()
+                pub   = WebPublisher(url, token)
+                ok, msg = pub.health_check()
+                if ok:
+                    self.after(0, messagebox.showinfo, "Teste", f"✓ Dashboard online!\nStatus: {msg}")
+                else:
+                    self.after(0, messagebox.showerror, "Teste", f"Falha: {msg}")
             except Exception as e:
                 self.after(0, messagebox.showerror, "Erro", str(e))
 

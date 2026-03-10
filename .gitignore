@@ -49,3 +49,9 @@ ENV/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ─── Next.js / Web dashboard ──────────────────────────────────────────────────
+web/.env.local       # Chaves Supabase + API_TOKEN — NUNCA commitar
+web/.next/
+web/node_modules/
+first_stand_roster.json  # Roster editado via UI

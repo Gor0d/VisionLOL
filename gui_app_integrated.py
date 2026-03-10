@@ -175,10 +175,25 @@ class VisionLOLAppIntegrated:
         self.notebook.add(self.tab_config, text="  Config  ")
         self._create_config_tab()
 
-        # Tab 5: Time (paiN Gaming roster)
+        # Tab 5: Time (roster)
         self.tab_team = tk.Frame(self.notebook, bg="#000000")
         self.notebook.add(self.tab_team, text="  🎮 Time  ")
         self._create_team_tab()
+
+        # Tab 6: Scouting First Stand 2025
+        self.tab_scouting = tk.Frame(self.notebook, bg="#000000")
+        self.notebook.add(self.tab_scouting, text="  🔍 Scouting  ")
+        self._create_scouting_tab()
+
+    def _create_scouting_tab(self):
+        """Cria conteúdo da aba Scouting — First Stand 2025."""
+        from riot_api.scout_viewer import ScoutingView
+        ScoutingView(
+            self.tab_scouting,
+            http_client=self.http_client,
+            match_api=self.match_api,
+            app_root=self.root,
+        )
 
     # ===================================================================
     #  TAB 1: MONITOR (funcionalidade existente)
