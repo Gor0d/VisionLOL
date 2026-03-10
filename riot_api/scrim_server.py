@@ -208,4 +208,54 @@ class ScrimServer:
             data  = self.get_captures(since=since)
             return jsonify({"captures": data, "count": len(data)})
 
+        @app.post("/live_update")
+        def live_update():
+            """
+            Recebe snapshot ao vivo do agente e repassa ao web dashboard.
+            O repasse é feito em background para não bloquear o agente.
+            """
+            if not _check_auth():
+                return jsonify({"error": "Unauthorized"}), 401
+
+            payload = request.get_json(silent=True)
+            if not payload:
+                return jsonify({"error": "Invalid JSON"}), 400
+
+            # Repassa ao web dashboard em thread separada (best-effort)
+            threading.Thread(
+                target=self._forward_live,
+                args=(payload,),
+                daemon=True,
+            ).start()
+
+            return jsonify({"status": "ok"}), 200
+
         return app
+
+    def _forward_live(self, payload: dict):
+        """Envia o snapshot ao /api/live/update do web dashboard."""
+        try:
+            from .config import load_config
+        except ImportError:
+            try:
+                from riot_api.config import load_config
+            except ImportError:
+                return
+
+        cfg       = load_config()
+        dash_url  = cfg.get("web_dashboard_url", "").rstrip("/")
+        api_token = cfg.get("web_api_token", "")
+
+        if not dash_url or not api_token:
+            return  # web dashboard não configurado — silencia
+
+        try:
+            import requests as _req
+            _req.post(
+                f"{dash_url}/api/live/update",
+                json=payload,
+                headers={"Authorization": f"Bearer {api_token}"},
+                timeout=8,
+            )
+        except Exception as e:
+            logger.debug(f"[live_forward] {e}")

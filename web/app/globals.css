@@ -72,3 +72,21 @@ body::after {
 
 .player-card { background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 4px; padding: 14px 16px; cursor: pointer; transition: border-color 0.15s, background 0.15s; display: block; text-decoration: none; color: inherit; }
 .player-card:hover { border-color: #333; background: #0e0e0e; }
+
+/* Live overlay */
+@keyframes live-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+.live-pulse {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #20F0FF;
+  box-shadow: 0 0 6px #20F0FF88;
+  animation: live-blink 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+.nav-live-badge {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: #20F0FF; margin-left: 4px; vertical-align: middle;
+  animation: live-blink 1.4s ease-in-out infinite;
+}

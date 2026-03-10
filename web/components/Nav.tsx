@@ -8,6 +8,7 @@ const links = [
   { href: "/scrims",   label: "SCRIMS" },
   { href: "/insights", label: "INSIGHTS" },
   { href: "/scouting", label: "SCOUTING" },
+  { href: "/live",     label: "LIVE", live: true },
 ];
 
 export default function Nav() {
@@ -39,21 +40,24 @@ export default function Nav() {
         <nav style={{ display: "flex", gap: 2 }}>
           {links.map(l => {
             const active = path === l.href || (l.href !== "/" && path.startsWith(l.href));
+            const isLive = (l as any).live === true;
             return (
               <Link key={l.href} href={l.href} style={{
                 padding: "0 12px",
                 height: 48,
                 display: "flex",
                 alignItems: "center",
+                gap: 4,
                 fontSize: 11,
                 fontWeight: 700,
                 letterSpacing: "0.12em",
-                color: active ? "#FF9830" : "#505050",
-                borderBottom: `2px solid ${active ? "#FF9830" : "transparent"}`,
+                color: active ? (isLive ? "#20F0FF" : "#FF9830") : isLive ? "#20F0FF88" : "#505050",
+                borderBottom: `2px solid ${active ? (isLive ? "#20F0FF" : "#FF9830") : "transparent"}`,
                 transition: "color 0.15s, border-color 0.15s",
                 textDecoration: "none",
               }}>
                 {l.label}
+                {isLive && <span className="nav-live-badge" />}
               </Link>
             );
           })}

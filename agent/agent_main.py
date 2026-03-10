@@ -31,9 +31,10 @@ if getattr(sys, "frozen", False):
 import agent_config  # noqa: E402
 
 # ── Constantes ────────────────────────────────────────────────────────
-LIVE_BASE    = "https://127.0.0.1:2999"
-POLL_SECONDS = 5
-VERSION      = "1.0"
+LIVE_BASE         = "https://127.0.0.1:2999"
+POLL_SECONDS      = 5
+LIVE_UPDATE_EVERY = 1   # enviar update ao vivo a cada N ciclos (1 = todo poll ~5s)
+VERSION           = "1.0"
 
 BG      = "#0d1117"
 BG_DARK = "#161b22"
@@ -54,11 +55,13 @@ class Agent:
     """Monitora o Live Client e envia dados ao servidor."""
 
     def __init__(self, on_status):
-        self._on_status  = on_status   # callback(msg: str, color: str)
-        self._stop       = threading.Event()
-        self._thread     = None
-        self._last_game  = None        # evita re-enviar o mesmo jogo
-        self._cfg        = agent_config.load()
+        self._on_status   = on_status   # callback(msg: str, color: str)
+        self._stop        = threading.Event()
+        self._thread      = None
+        self._last_game   = None        # evita re-enviar o mesmo jogo
+        self._match_key   = None        # chave da partida atual (para live updates)
+        self._live_cycle  = 0           # contador de ciclos para throttle
+        self._cfg         = agent_config.load()
 
     def start(self):
         if self._thread and self._thread.is_alive():
@@ -95,7 +98,18 @@ class Agent:
 
             if not in_game:
                 in_game = True
+                # Gera match_key único no início do jogo baseado no timestamp atual
+                self._match_key  = f"LIVE_{int(time.time())}"
+                self._live_cycle = 0
                 self._status("Jogo detectado! Monitorando…", ACCENT)
+
+            # Envia update ao vivo a cada LIVE_UPDATE_EVERY ciclos
+            self._live_cycle += 1
+            if self._live_cycle >= LIVE_UPDATE_EVERY:
+                self._live_cycle = 0
+                threading.Thread(
+                    target=self._send_live, args=(allgame,), daemon=True
+                ).start()
 
             # Verifica evento GameEnd
             events = allgame.get("events", {}).get("Events", [])
@@ -103,11 +117,15 @@ class Agent:
 
             if end_ev:
                 game_time = allgame.get("gameData", {}).get("gameTime", 0)
-                game_key  = f"{int(game_time)}"   # identificador único aproximado
+                game_key  = f"{int(game_time)}"
 
                 if game_key != self._last_game:
                     self._last_game = game_key
                     in_game = False
+                    # Envia update final marcando jogo como inativo
+                    threading.Thread(
+                        target=self._send_live, args=(allgame, False), daemon=True
+                    ).start()
                     self._status("Jogo finalizado! Enviando dados…", WARNING)
                     self._send(allgame)
 
@@ -160,6 +178,84 @@ class Agent:
             self._status("⚠  Servidor não alcançado. Verifique a URL.", DANGER)
         except Exception as e:
             self._status(f"Erro ao enviar: {e}", DANGER)
+
+    def _send_live(self, allgame: dict, is_active: bool = True):
+        """Envia snapshot ao vivo para o servidor relay (Flask /live_update)."""
+        cfg   = self._cfg
+        url   = cfg.get("server_url", "").rstrip("/")
+        token = cfg.get("auth_token", "")
+        pid   = cfg.get("player_riot_id", "")
+
+        if not url or not token or not pid or not self._match_key:
+            return
+
+        active_player   = allgame.get("activePlayer", {})
+        all_players_raw = allgame.get("allPlayers", [])
+        game_data       = allgame.get("gameData", {})
+        events_raw      = allgame.get("events", {}).get("Events", [])
+        game_time       = game_data.get("gameTime", 0)
+
+        # Encontra o campeão e time do jogador ativo
+        summoner_name = active_player.get("summonerName", "")
+        champion  = ""
+        team      = "ORDER"
+        kills = deaths = assists = cs = 0
+        level = active_player.get("level", 1)
+
+        for p in all_players_raw:
+            if p.get("summonerName", "") == summoner_name:
+                champion = p.get("championName", "")
+                team     = p.get("team", "ORDER")
+                kills    = p.get("kills", 0)
+                deaths   = p.get("deaths", 0)
+                assists  = p.get("assists", 0)
+                cs       = p.get("creepScore", 0)
+                break
+
+        current_gold = active_player.get("currentGold", 0)
+
+        # Versão enxuta de all_players (sem items para reduzir payload)
+        all_players = [
+            {
+                "championName": p.get("championName", ""),
+                "summonerName": p.get("summonerName", ""),
+                "kills":        p.get("kills", 0),
+                "deaths":       p.get("deaths", 0),
+                "assists":      p.get("assists", 0),
+                "creepScore":   p.get("creepScore", 0),
+                "level":        p.get("level", 1),
+                "team":         p.get("team", "ORDER"),
+                "position":     p.get("position", ""),
+            }
+            for p in all_players_raw
+        ]
+
+        payload = {
+            "match_key":    self._match_key,
+            "player_id":    pid,
+            "game_time":    game_time,
+            "champion":     champion,
+            "current_gold": current_gold,
+            "kills":        kills,
+            "deaths":       deaths,
+            "assists":      assists,
+            "cs":           cs,
+            "level":        level,
+            "team":         team,
+            "all_players":  all_players,
+            "events":       events_raw,
+            "is_active":    is_active,
+        }
+
+        try:
+            requests.post(
+                f"{url}/live_update",
+                json=payload,
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=8,
+            )
+        except Exception:
+            pass  # live updates são best-effort, sem alert ao usuário
 
     def test_connection(self) -> tuple[bool, str]:
         """Testa conexão com o servidor. Retorna (ok, mensagem)."""
