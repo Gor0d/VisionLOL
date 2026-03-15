@@ -185,11 +185,26 @@ class VisionLOLAppIntegrated:
         self.notebook.add(self.tab_scouting, text="  🔍 Scouting  ")
         self._create_scouting_tab()
 
+        # Tab 7: Coaching
+        self.tab_coaching = tk.Frame(self.notebook, bg="#000000")
+        self.notebook.add(self.tab_coaching, text="  🎯 Coaching  ")
+        self._create_coaching_tab()
+
     def _create_scouting_tab(self):
         """Cria conteúdo da aba Scouting — First Stand 2025."""
         from riot_api.scout_viewer import ScoutingView
         ScoutingView(
             self.tab_scouting,
+            http_client=self.http_client,
+            match_api=self.match_api,
+            app_root=self.root,
+        )
+
+    def _create_coaching_tab(self):
+        """Cria conteúdo da aba Coaching — VisionCoach v1.0."""
+        from coaching.ui.coaching_dashboard import CoachingDashboard
+        CoachingDashboard(
+            self.tab_coaching,
             http_client=self.http_client,
             match_api=self.match_api,
             app_root=self.root,
