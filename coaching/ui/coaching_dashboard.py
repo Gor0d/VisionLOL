@@ -150,6 +150,12 @@ class CoachingDashboard:
             updated = next((x for x in self._players if x.id == self._selected.id), None)
             self._render_detail(updated)
 
+    def _bind_click_recursive(self, widget, callback):
+        """Vincula <Button-1> ao widget e a todos os seus filhos."""
+        widget.bind("<Button-1>", callback)
+        for child in widget.winfo_children():
+            self._bind_click_recursive(child, callback)
+
     def _render_player_card(self, player: Player):
         is_sel = self._selected and self._selected.id == player.id
         bg = BG_MEDIUM if is_sel else BG_DARK
@@ -159,11 +165,9 @@ class CoachingDashboard:
                         highlightbackground=ACCENT if is_sel else BORDER,
                         cursor="hand2")
         card.pack(fill=tk.X, pady=2, padx=2)
-        card.bind("<Button-1>", lambda e, p=player: self._select_player(p))
 
         top = tk.Frame(card, bg=bg)
         top.pack(fill=tk.X, padx=8, pady=(6, 2))
-        top.bind("<Button-1>", lambda e, p=player: self._select_player(p))
 
         role_color = ROLE_COLOR.get(player.role, DIM)
         tk.Label(top, text=player.role, bg=bg, fg=role_color,
@@ -173,13 +177,15 @@ class CoachingDashboard:
 
         bot = tk.Frame(card, bg=bg)
         bot.pack(fill=tk.X, padx=8, pady=(0, 6))
-        bot.bind("<Button-1>", lambda e, p=player: self._select_player(p))
         sessions = list_sessions(player.id)
         last_str = sessions[0].date[:10] if sessions else "sem sessões"
         rank_str = player.rank or "—"
         tk.Label(bot, text=f"{rank_str} · {len(sessions)} sessão(ões)",
                  bg=bg, fg=DIM, font=FONT_SMALL).pack(side=tk.LEFT)
         tk.Label(bot, text=last_str, bg=bg, fg=DIM, font=FONT_SMALL).pack(side=tk.RIGHT)
+
+        # Vincula clique em todo o card (frames + labels filhos)
+        self._bind_click_recursive(card, lambda e, p=player: self._select_player(p))
 
     # ═══════════════════════════════════════════════════════════════
     #  DETAIL PANEL

@@ -2,13 +2,14 @@
 // ⚠ Confirmar gameName#tagLine exatos via Riot client antes de sincronizar
 
 export interface Player {
-  key: string;          // "GameName#TAG"
+  key: string;          // "GameName#TAG" (conta principal)
   gameName: string;
   tagLine: string;
   display: string;      // nome de exibição
   role: "TOP" | "JUNGLE" | "MIDDLE" | "BOTTOM" | "SUPPORT";
   region: string;
   routing: "americas" | "asia" | "europe" | "sea";
+  alts?: { gameName: string; tagLine: string }[];  // contas secundárias/smurfs
 }
 
 export interface Team {
@@ -55,8 +56,8 @@ export const TEAMS: Team[] = [
     region: "CBLOL",
     color: "#00FF87",
     players: [
-      BR("xyno",    "xyno",           "kiwi", "TOP"),
-      BR("YoungJae","YoungDisney",     "LOUD", "JUNGLE"),
+      { ...BR("xyno",    "xyno",           "kiwi", "TOP"),    alts: [{ gameName: "daniel ceasar", tagLine: "mari" }] },
+      { ...BR("YoungJae","YoungDisney",     "LOUD", "JUNGLE"), alts: [{ gameName: "Pigbert",        tagLine: "LOUD" }] },
       BR("Envy",    "potato the cat", "envy", "MIDDLE"),
       BR("Bull",    "Capoeira rei",   "2003", "BOTTOM"),
       BR("RedBert", "RedBert",         "BR1", "SUPPORT"),

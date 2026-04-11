@@ -41,7 +41,11 @@ export async function POST(req: NextRequest) {
   let body: any;
   try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid json" }, { status: 400 }); }
 
-  const { playerKey, gameName, tagLine, region = "br1", routing = "americas", team = "", count = 20 } = body;
+  const {
+    playerKey, gameName, tagLine,
+    region = "br1", routing = "americas", team = "", count = 20,
+    alts = [],   // [{ gameName, tagLine }] — contas alternativas em caso de 404
+  } = body;
 
   if (!gameName || !tagLine) {
     return NextResponse.json({ error: "gameName e tagLine são obrigatórios" }, { status: 400 });
@@ -51,17 +55,40 @@ export async function POST(req: NextRequest) {
   const key = playerKey ?? `${gameName}#${tagLine}`;
 
   try {
-    // ── 1. Resolver PUUID ─────────────────────────────────────────────
-    let puuid: string;
+    // ── 1. Resolver PUUID (com fallback para contas alternativas) ─────
+    let puuid: string = "";
+    let resolvedName = gameName;
+    let resolvedTag  = tagLine;
+
     const { data: cached } = await db.from("riot_accounts").select("puuid").eq("player_key", key).single();
 
     if (cached?.puuid) {
       puuid = cached.puuid;
     } else {
-      puuid = await getPuuid(gameName, tagLine, routing);
+      // Tenta conta principal, depois as alternativas
+      const candidates = [{ gameName, tagLine }, ...alts];
+      let lastError: Error | null = null;
+      let resolved = false;
+
+      for (const c of candidates) {
+        try {
+          puuid = await getPuuid(c.gameName, c.tagLine, routing);
+          resolvedName = c.gameName;
+          resolvedTag  = c.tagLine;
+          resolved = true;
+          break;
+        } catch (e: any) {
+          lastError = e;
+          console.warn(`[sync] 404 para ${c.gameName}#${c.tagLine}, tentando próxima conta...`);
+          await sleep(200);
+        }
+      }
+
+      if (!resolved) throw lastError ?? new Error("Nenhuma conta encontrada");
+
       await db.from("riot_accounts").upsert({
-        player_key: key, puuid, game_name: gameName, tag_line: tagLine, team, region, routing,
-        updated_at: new Date().toISOString(),
+        player_key: key, puuid: puuid!, game_name: resolvedName, tag_line: resolvedTag,
+        team, region, routing, updated_at: new Date().toISOString(),
       }, { onConflict: "player_key" });
     }
 
