@@ -1,7 +1,11 @@
 <p align="center">
   <img src="docs/screenshots/banner.png" alt="VisionLOL" width="100%"/>
 </p>
-
+<p align="center">
+  <a href="https://feitonobrasil.dev.br">
+    <img src="https://selo.feitonobrasil.dev.br/en/branco/2x.svg" alt="Made in Brazil" width="500" height="240" />
+  </a>
+</p>
 Ferramenta de análise e monitoramento de performance para times de League of Legends.
 Integração completa com a Riot Games API para acompanhamento de soloq, scrims e estatísticas individuais.
 
